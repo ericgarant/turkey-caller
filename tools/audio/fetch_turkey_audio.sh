@@ -34,27 +34,38 @@ gobble|Gobbling.mp3
 # trim leading/trailing silence, normalise loudness (applied to every clip)
 FILTER="silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse,loudnorm=I=-14:TP=-1.0"
 
+if [ "$FORMAT" = wav ]; then OUT=(-ac 1 -ar 22050 -c:a pcm_s16le); else OUT=(-ac 1 -ar 44100 -c:a libmp3lame -b:a 64k); fi
+
+# is_audio FILE: true only if ffprobe finds an audio stream (rejects HTML bot-check pages saved as .mp3)
+is_audio() { ffprobe -v error -select_streams a -show_entries stream=codec_type -of csv=p=0 "$1" 2>/dev/null | grep -q audio; }
+
+# fetch URL RAWFILE: download unless a valid cached copy exists; never keep a non-audio file
+fetch() {
+  if [ -s "$2" ] && is_audio "$2"; then return 0; fi
+  rm -f "$2"
+  curl -fsSL "$1" -o "$2.part" && is_audio "$2.part" && mv "$2.part" "$2" && return 0
+  rm -f "$2.part"; return 1
+}
+
+# convert RAWFILE NAME [START]: on failure delete the raw file so the next run downloads it again
+convert() {
+  ffmpeg -loglevel error -y -ss "${3:-0}" -i "$1" -af "$FILTER" -t "$MAXSEC" "${OUT[@]}" "data/$2.$FORMAT" \
+    || { echo "!! convert failed: $1"; rm -f "$1"; return 1; }
+}
+
 mkdir -p raw data
 for line in $CLIPS; do
   name="${line%%|*}"; src="${line##*|}"
-  [ -s "raw/$src" ] || curl -fsSL "$BASE/$src" -o "raw/$src" || { echo "!! failed: $src"; continue; }
-  if [ "$FORMAT" = wav ]; then
-    ffmpeg -loglevel error -y -i "raw/$src" -af "$FILTER" -t "$MAXSEC" -ac 1 -ar 22050 -c:a pcm_s16le "data/$name.wav" \
-      || { echo "!! convert failed: $src"; continue; }
-  else
-    ffmpeg -loglevel error -y -i "raw/$src" -af "$FILTER" -t "$MAXSEC" -ac 1 -ar 44100 -c:a libmp3lame -b:a 64k "data/$name.mp3" \
-      || { echo "!! convert failed: $src"; continue; }
-  fi
+  fetch "$BASE/$src" "raw/$src" || { echo "!! failed: $src ($BASE/$src)"; continue; }
+  convert "raw/$src" "$name" || continue
 done
 
 # whine from Xeno-canto (cut from WHINE_START, then same cleanup as the others)
-wsrc="XC$WHINE_XC.mp3"
-if [ -s "raw/$wsrc" ] || curl -fsSL "https://xeno-canto.org/$WHINE_XC/download" -o "raw/$wsrc"; then
-  if [ "$FORMAT" = wav ]; then OUT=(-ac 1 -ar 22050 -c:a pcm_s16le); else OUT=(-ac 1 -ar 44100 -c:a libmp3lame -b:a 64k); fi
-  ffmpeg -loglevel error -y -ss "$WHINE_START" -i "raw/$wsrc" -af "$FILTER" -t "$MAXSEC" "${OUT[@]}" "data/whine.$FORMAT" \
-    || echo "!! convert failed: $wsrc"
+wsrc="raw/XC$WHINE_XC.mp3"
+if fetch "https://xeno-canto.org/$WHINE_XC/download" "$wsrc"; then
+  convert "$wsrc" whine "$WHINE_START" || true
 else
-  echo "!! failed: $wsrc (open https://xeno-canto.org/$WHINE_XC in a browser to check it exists)"
+  echo "!! failed: $wsrc. Download it in a browser from https://xeno-canto.org/$WHINE_XC and save it as tools/audio/$wsrc"
 fi
 
 echo; printf "%-20s %8s %8s\n" file seconds bytes

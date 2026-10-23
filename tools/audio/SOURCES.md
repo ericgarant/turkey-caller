@@ -20,12 +20,21 @@ Credit: "All audio courtesy National Wild Turkey Federation" (nwtf.org). Page fo
 | gobble.mp3 | Gobbling | Gobbling.mp3 |
 
 ## Whine (Xeno-canto)
-| ESP32 file | Call | Source |
-|---|---|---|
-| whine.mp3 | Whine | https://xeno-canto.org/538558 (default; change with `WHINE_XC` / `WHINE_START`) |
+| Field | Value |
+|---|---|
+| ESP32 file | whine.mp3 |
+| Recording | XC538558, https://xeno-canto.org/538558 (change with `WHINE_XC` / `WHINE_START`) |
+| Species | TO CONFIRM on the page: *Meleagris gallopavo* |
+| Recordist | TO CONFIRM (copy the name from the recording page) |
+| Licence | TO CONFIRM (exact name and version, with link, e.g. CC BY-NC-SA 4.0, https://creativecommons.org/licenses/by-nc-sa/4.0/) |
+| Changes | Modified: cut from `WHINE_START` to 10 s max, silence trimmed, loudness normalised (-14 LUFS), downmixed to mono, re-encoded as 64 kbps MP3 |
 
-Picked without listening, from a search for turkey whine recordings. Check by ear; alternates: XC433074, XC508128.
-Xeno-canto recordings are Creative Commons (usually BY-NC-SA): credit the recordist named on the recording page.
+This recording was picked without listening (the sandbox can't open xeno-canto), so the species, the call type and the details above still need checking on the page. Alternates: XC433074, XC508128.
+
+Licence rules for the edited clip:
+- **BY-NC-ND**: the trimmed and normalised clip is an adaptation, which ND forbids sharing. Use it on your own device only, never commit or share it, or pick a non-ND recording instead.
+- **BY-NC-SA**: any shared copy of the edited clip must carry the same licence and the attribution above.
+- Either way the clip stays git-ignored, like the rest of `data/`.
 
 ## Gaps
 - Gobbler yelp / jake yelp, kee-kee alone, fighting purr: not in this set.
