@@ -20,21 +20,23 @@ Credit: "All audio courtesy National Wild Turkey Federation" (nwtf.org). Page fo
 | gobble.mp3 | Gobbling | Gobbling.mp3 |
 
 ## Whine (Xeno-canto)
-| Field | Value |
-|---|---|
-| ESP32 file | whine.mp3 |
-| Recording | XC538558, https://xeno-canto.org/538558 (change with `WHINE_XC` / `WHINE_START`) |
-| Species | TO CONFIRM on the page: *Meleagris gallopavo* |
-| Recordist | TO CONFIRM (copy the name from the recording page) |
-| Licence | TO CONFIRM (exact name and version, with link, e.g. CC BY-NC-SA 4.0, https://creativecommons.org/licenses/by-nc-sa/4.0/) |
-| Changes | Modified: cut from `WHINE_START` to 10 s max, silence trimmed, loudness normalised (-14 LUFS), downmixed to mono, re-encoded as 64 kbps MP3 |
+`whine.mp3` comes from one of these recordings. All three are *Meleagris gallopavo* and the audio is licensed
+**CC BY-NC-SA 4.0** (https://creativecommons.org/licenses/by-nc-sa/4.0/), not ND, so an edited copy may be shared
+under the same licence. Details from the Xeno-canto record as published on GBIF.
 
-This recording was picked without listening (the sandbox can't open xeno-canto), so the species, the call type and the details above still need checking on the page. Alternates: XC433074, XC508128.
+| | Recording | Recordist | Date, place | Xeno-canto labels |
+|---|---|---|---|---|
+| **default** | XC508128, https://xeno-canto.org/508128 | Will Sweet | 2019-11-16, Drakes Island, York County, Maine | call, walking; sex indeterminate |
+| alternate | XC433074, https://xeno-canto.org/433074 | Phil Brown | 2018-05-28, Plum Island, Newbury, Massachusetts | call |
+| alternate | XC538558, https://xeno-canto.org/538558 | Ken Blankenship | 2017-04-07, Sawmill Canyon, Huachuca Mountains, Arizona | call; male |
 
-Licence rules for the edited clip:
-- **BY-NC-ND**: the trimmed and normalised clip is an adaptation, which ND forbids sharing. Use it on your own device only, never commit or share it, or pick a non-ND recording instead.
-- **BY-NC-SA**: any shared copy of the edited clip must carry the same licence and the attribution above.
-- Either way the clip stays git-ignored, like the rest of `data/`.
+Select with `WHINE_XC` and `WHINE_START`. XC508128 is the default because it's a fall flock walking and calling, which is where hens whine. XC538558 is a male, so likely gobbles. None of the records says "whine" in a label, so the call type still needs checking by ear.
+
+**Attribution line** (use for any shared copy):
+"Wild Turkey call, XC508128 by Will Sweet, xeno-canto.org/508128, CC BY-NC-SA 4.0. Modified: cut from WHINE_START to 10 s max, silence trimmed, loudness normalised (-14 LUFS), downmixed to mono, re-encoded as 64 kbps MP3."
+(Swap ID and recordist if an alternate is used.)
+
+The clip stays git-ignored, like the rest of `data/`.
 
 ## Gaps
 - Gobbler yelp / jake yelp, kee-kee alone, fighting purr: not in this set.

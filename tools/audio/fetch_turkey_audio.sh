@@ -11,7 +11,7 @@ MAXSEC="${MAXSEC:-10}"
 # Whine: not in the SC DNR set, taken from a Xeno-canto field recording (CC licence, see SOURCES.md).
 # Listen to data/whine.mp3; if it's wrong, pick another recording or start time:
 #   WHINE_XC=433074 WHINE_START=12 ./fetch_turkey_audio.sh
-WHINE_XC="${WHINE_XC:-538558}"
+WHINE_XC="${WHINE_XC:-508128}"
 WHINE_START="${WHINE_START:-0}"
 cd "$(dirname "$0")"   # always write raw/ and data/ next to this script (git-ignored)
 BASE="https://www.dnr.sc.gov/wildlife/turkey/sound"
