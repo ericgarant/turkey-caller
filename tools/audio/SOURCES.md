@@ -19,8 +19,15 @@ Credit: "All audio courtesy National Wild Turkey Federation" (nwtf.org). Page fo
 | cluck_purr.mp3 | Cluck and purr | Cluck_Purr.mp3 |
 | gobble.mp3 | Gobbling | Gobbling.mp3 |
 
+## Whine (Xeno-canto)
+| ESP32 file | Call | Source |
+|---|---|---|
+| whine.mp3 | Whine | https://xeno-canto.org/538558 (default; change with `WHINE_XC` / `WHINE_START`) |
+
+Picked without listening, from a search for turkey whine recordings. Check by ear; alternates: XC433074, XC508128.
+Xeno-canto recordings are Creative Commons (usually BY-NC-SA): credit the recordist named on the recording page.
+
 ## Gaps
-- Whine: not in this set.
 - Gobbler yelp / jake yelp, kee-kee alone, fighting purr: not in this set.
 
 ## Openly licensed alternative (for a public repo)
