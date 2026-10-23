@@ -15,7 +15,7 @@ Full design: [docs/architecture.md](docs/architecture.md)
 |---|---|
 | `firmware/` | PlatformIO project (Arduino core 3.x via pioarduino) |
 | `firmware/partitions.csv` | 2 MB app + 1.875 MB LittleFS |
-| `firmware/data/sounds/` | Generated sound files (not in git) |
+| `firmware/data/sounds/` | Generated sound files (not in git) + hand-written `index.json` |
 | `web/` | Web app source and mock API server |
 | `tools/audio/` | Sound download/convert script and source list |
 | `docs/` | Architecture, feature specs, test plans |
