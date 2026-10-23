@@ -3,3 +3,14 @@ tools/audio/raw/
 tools/audio/data/
 data/*.mp3
 data/*.wav
+firmware/data/sounds/*
+!firmware/data/sounds/.gitkeep
+
+# PlatformIO
+firmware/.pio/
+.vscode/
+
+# OS / editors
+.DS_Store
+__pycache__/
+node_modules/
