@@ -1,0 +1,5 @@
+# Downloaded turkey call audio is not openly licensed: fetch it locally, never commit it
+tools/audio/raw/
+tools/audio/data/
+data/*.mp3
+data/*.wav
