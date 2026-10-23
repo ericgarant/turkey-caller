@@ -5,6 +5,7 @@ data/*.mp3
 data/*.wav
 firmware/data/sounds/*
 !firmware/data/sounds/.gitkeep
+!firmware/data/sounds/index.json
 
 # PlatformIO
 firmware/.pio/
