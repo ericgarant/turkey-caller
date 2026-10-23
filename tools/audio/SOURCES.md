@@ -30,7 +30,7 @@ They are field recordings: you must listen and cut each call by hand, and labels
 The API (v3) needs a free account key. Macaulay Library (Cornell) does not allow redistribution.
 
 ## Format and flash budget (ESP32-WROOM-32E, 4 MB flash)
-- Default: MP3 mono 64 kbps 44.1 kHz ~ 8 KB/s. 11 clips x ~6 s ~ 0.5 MB. Fits a ~1.5 MB LittleFS partition.
+- Default: MP3 mono 64 kbps 44.1 kHz ~ 8 KB/s. 11 clips x ~6 s ~ 0.5 MB. Fits the LittleFS partition defined in `firmware/partitions.csv` (that file is the source of truth for its size).
 - 44.1 kHz is chosen because A2DP/SBC to the speaker runs at 44.1 kHz, so no resampling on the ESP32.
 - WAV mono 16-bit 22.05 kHz ~ 44 KB/s: 11 clips ~ 2.9 MB, too big next to the firmware. Only use WAV for a few short clips.
 - MP3 needs a decoder on the ESP32 (e.g. libhelix in arduino-audio-tools / ESP32-A2DP).
