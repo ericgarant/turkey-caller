@@ -137,10 +137,11 @@ void handleConnect(AsyncWebServerRequest *req) {
 
 void begin() {
   WiFi.mode(WIFI_AP);
-  WiFi.softAP(kApName, kApPassword, kApChannel, 0, kMaxClients);
+  bool apOk = WiFi.softAP(kApName, kApPassword, kApChannel, 0, kMaxClients);
   IPAddress ip = WiFi.softAPIP();
-  dns.start(53, "*", ip);  // captive portal: every name resolves to us
-  log_i("Wi-Fi \"%s\" up at http://%s", kApName, ip.toString().c_str());
+  bool dnsOk = dns.start(53, "*", ip);  // captive portal: every name resolves to us
+  Serial.printf("Wi-Fi AP \"%s\" %s, channel %d, ip %s, captive DNS %s\n", kApName,
+                apOk ? "up" : "FAILED", WiFi.channel(), ip.toString().c_str(), dnsOk ? "up" : "FAILED");
 
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
     AsyncWebServerResponse *res = req->beginResponse(200, "text/html", kPageGz, sizeof(kPageGz));
@@ -168,7 +169,10 @@ void begin() {
     req->redirect("http://" + WiFi.softAPIP().toString() + "/");
   });
   server.begin();
+  Serial.println("HTTP server started on port 80");
 }
+
+int clients() { return WiFi.softAPgetStationNum(); }
 
 void loop() {
   dns.processNextRequest();

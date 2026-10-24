@@ -37,8 +37,8 @@ void loop() {
   if (millis() - last >= 5000) {
     last = millis();
     player::Stats p = player::stats();
-    Serial.printf("[%lus] bt=%s playing=%s plays=%u underruns=%u heap=%u min=%u block=%u\n",
-                  (unsigned long)(millis() / 1000), bt::state(), p.playing ? p.current : "-",
+    Serial.printf("[%lus] clients=%d bt=%s playing=%s plays=%u underruns=%u heap=%u min=%u block=%u\n",
+                  (unsigned long)(millis() / 1000), web::clients(), bt::state(), p.playing ? p.current : "-",
                   (unsigned)p.plays, (unsigned)p.underruns, (unsigned)ESP.getFreeHeap(),
                   (unsigned)ESP.getMinFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
   }
