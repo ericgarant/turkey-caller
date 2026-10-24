@@ -2,12 +2,12 @@
 
 PlatformIO project for the Freenove ESP32-WROOM-32E (4 MB flash, no PSRAM).
 
-**Phase 0** (this code): the ESP32 runs its own Wi-Fi network with a test page, and plays MP3 calls from LittleFS on a Bluetooth A2DP speaker. The goal is to prove Wi-Fi and Bluetooth audio work together before building the real app.
+**Phase 0** (this code): the ESP32 runs its own Wi-Fi network with a test page, and plays turkey calls (IMA ADPCM WAV) from LittleFS on a Bluetooth A2DP speaker. The goal is to prove Wi-Fi and Bluetooth audio work together before building the real app.
 
 | File | Job |
 |---|---|
 | `src/main.cpp` | Boot order, serial health log every 5 s |
-| `src/player.*` | Decode task (Helix MP3), 16 KB ring buffer, volume, A2DP data callback |
+| `src/player.*` | WAV/IMA ADPCM decode task, resampler to 44.1 kHz, 16 KB ring buffer, volume, A2DP data callback |
 | `src/bt.*` | A2DP source: finds the saved speaker by name, remembers its address, reconnects |
 | `src/web.*` | softAP `TurkeyCaller`, captive DNS, test page, JSON API |
 | `page/index.html` | The test page. Gzipped into `src/page.h` at build time by `scripts/embed_page.py` |
@@ -22,7 +22,8 @@ The board is plugged into the Mac by USB.
 2. Get the sounds (needs `brew install ffmpeg`), from the repo root:
    ```sh
    cd tools/audio && ./fetch_turkey_audio.sh
-   cp data/*.mp3 ../../firmware/data/sounds/
+   rm -f ../../firmware/data/sounds/*.mp3
+   cp data/*.wav ../../firmware/data/sounds/
    cd ../../firmware
    ```
 3. Build and flash the firmware, then the sounds:
@@ -52,7 +53,7 @@ Parameters are form fields or query strings; replies are JSON.
 | Call | Purpose |
 |---|---|
 | `GET /api/status` | Bluetooth state, speaker, now playing, volume, plays, underruns, buffer fill, free/min heap, free storage |
-| `GET /api/sounds` | Sound names from `/sounds/*.mp3` |
+| `GET /api/sounds` | Sound names from `/sounds/*.wav` |
 | `POST /api/play` `id=cluck` | Play; a new play replaces the current one. 409 if no speaker is connected |
 | `POST /api/stop` | Stop |
 | `POST /api/volume` `level=0..100` | Software gain, saved in NVS |

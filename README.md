@@ -5,7 +5,7 @@ An ESP32 that stores turkey calls and plays them on a Bluetooth speaker. The ESP
 - **Board:** Freenove ESP32-WROOM-32E (4 MB flash, no PSRAM)
 - **Phone → ESP32:** the ESP32 runs its own Wi-Fi network; the control page opens at `http://192.168.4.1`
 - **ESP32 → speaker:** Bluetooth Classic A2DP ([ESP32-A2DP](https://github.com/pschatzmann/ESP32-A2DP))
-- **Sounds:** mono MP3s in a LittleFS partition, decoded on the ESP32
+- **Sounds:** mono IMA ADPCM WAV files (22.05 kHz) in a LittleFS partition, decoded on the ESP32
 
 Full design: [docs/architecture.md](docs/architecture.md)
 
@@ -27,7 +27,8 @@ The recordings are downloaded, not stored in this repo, because most of them are
 ```sh
 brew install ffmpeg
 cd tools/audio && ./fetch_turkey_audio.sh
-cp data/*.mp3 ../../firmware/data/sounds/
+rm -f ../../firmware/data/sounds/*.mp3
+cp data/*.wav ../../firmware/data/sounds/
 ```
 
 Sources and licenses are listed in `tools/audio/SOURCES.md`.

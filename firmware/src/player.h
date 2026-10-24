@@ -1,4 +1,4 @@
-// player: MP3 decode task + ring buffer feeding the A2DP data callback.
+// player: WAV (IMA ADPCM) decode task + ring buffer feeding the A2DP data callback.
 #pragma once
 #include <Arduino.h>
 #include <BluetoothA2DPSource.h>

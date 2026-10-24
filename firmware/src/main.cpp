@@ -1,4 +1,4 @@
-// Turkey Caller, Phase 0: prove Wi-Fi softAP + web page + Bluetooth A2DP MP3 playback together.
+// Turkey Caller, Phase 0: prove Wi-Fi softAP + web page + Bluetooth A2DP playback together.
 #include <Arduino.h>
 #include <LittleFS.h>
 

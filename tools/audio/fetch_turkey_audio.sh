@@ -3,10 +3,11 @@
 # Run on your Mac:  brew install ffmpeg   then   cd tools/audio && ./fetch_turkey_audio.sh
 # Output: ./raw (originals) and ./data (converted, ready for the ESP32 LittleFS image)
 #
-# FORMAT: mp3 (default, mono 64 kbps 44.1 kHz, ~8 KB/s) or wav (mono 16-bit 22.05 kHz, ~44 KB/s)
+# FORMAT: adpcm (default: mono IMA ADPCM WAV, 22.05 kHz, ~11 KB/s; what the firmware plays),
+#         wav (mono 16-bit PCM 22.05 kHz, ~44 KB/s; also plays) or mp3 (64 kbps, for listening only)
 # MAXSEC: longest clip kept, in seconds (default 10)
 set -euo pipefail
-FORMAT="${FORMAT:-mp3}"
+FORMAT="${FORMAT:-adpcm}"
 MAXSEC="${MAXSEC:-10}"
 # Whine: not in the SC DNR set, taken from a Xeno-canto field recording (CC licence, see SOURCES.md).
 # Listen to data/whine.mp3; if it's wrong, pick another recording or start time:
@@ -34,7 +35,12 @@ gobble|Gobbling.mp3
 # trim leading/trailing silence, normalise loudness (applied to every clip)
 FILTER="silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse,loudnorm=I=-14:TP=-1.0"
 
-if [ "$FORMAT" = wav ]; then OUT=(-ac 1 -ar 22050 -c:a pcm_s16le); else OUT=(-ac 1 -ar 44100 -c:a libmp3lame -b:a 64k); fi
+case "$FORMAT" in
+  adpcm) OUT=(-ac 1 -ar 22050 -c:a adpcm_ima_wav); EXT=wav ;;
+  wav)   OUT=(-ac 1 -ar 22050 -c:a pcm_s16le); EXT=wav ;;
+  mp3)   OUT=(-ac 1 -ar 44100 -c:a libmp3lame -b:a 64k); EXT=mp3 ;;
+  *) echo "FORMAT must be adpcm, wav or mp3"; exit 1 ;;
+esac
 
 # is_audio FILE: true only if ffprobe finds an audio stream (rejects HTML bot-check pages saved as .mp3)
 is_audio() { ffprobe -v error -select_streams a -show_entries stream=codec_type -of csv=p=0 "$1" 2>/dev/null | grep -q audio; }
@@ -49,7 +55,7 @@ fetch() {
 
 # convert RAWFILE NAME [START]: on failure delete the raw file so the next run downloads it again
 convert() {
-  ffmpeg -loglevel error -y -ss "${3:-0}" -i "$1" -af "$FILTER" -t "$MAXSEC" "${OUT[@]}" "data/$2.$FORMAT" \
+  ffmpeg -loglevel error -y -ss "${3:-0}" -i "$1" -af "$FILTER" -t "$MAXSEC" "${OUT[@]}" "data/$2.$EXT" \
     || { echo "!! convert failed: $1"; rm -f "$1"; return 1; }
 }
 
@@ -70,12 +76,12 @@ fi
 
 echo; printf "%-20s %8s %8s\n" file seconds bytes
 total=0; count=0
-for f in data/*."$FORMAT"; do
+for f in data/*."$EXT"; do
   [ -e "$f" ] || continue
   count=$((count+1))
   d=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$f")
   b=$(wc -c <"$f" | tr -d ' '); total=$((total+b))
   printf "%-20s %8.1f %8d\n" "$(basename "$f")" "$d" "$b"
 done
-[ "$count" -gt 0 ] || { echo "No $FORMAT clips in data/ (all downloads failed?)"; exit 1; }
+[ "$count" -gt 0 ] || { echo "No .$EXT clips in data/ (all downloads failed?)"; exit 1; }
 echo "TOTAL: $count clips, $total bytes (~$((total/1024)) KB)"

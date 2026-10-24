@@ -97,7 +97,7 @@ void handleSounds(AsyncWebServerRequest *req) {
   if (dir && dir.isDirectory()) {
     for (File f = dir.openNextFile(); f; f = dir.openNextFile()) {
       String name = f.name();
-      if (!name.endsWith(".mp3")) continue;
+      if (!name.endsWith(".wav")) continue;
       name.remove(name.length() - 4);
       if (!first) j += ",";
       j += jsonStr(name.c_str());

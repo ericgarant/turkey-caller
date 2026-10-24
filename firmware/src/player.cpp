@@ -1,16 +1,14 @@
 #include "player.h"
 
 #include <LittleFS.h>
-#include <MP3DecoderHelix.h>
 #include <Preferences.h>
 #include <freertos/queue.h>
 
 namespace player {
 namespace {
 
-// Ring buffer of mono 16-bit PCM at 44.1 kHz. 16 KB is ~0.19 s. The decoder runs several
-// times faster than real time, so this is plenty, and RAM is tight with Wi-Fi, a connected
-// A2DP speaker and the decoder all up (the 32 KB ring ran the heap out on the board).
+// Ring buffer of mono 16-bit PCM at 44.1 kHz. 16 KB is ~0.19 s. ADPCM decodes far faster
+// than real time, so this is plenty, and RAM is tight with Wi-Fi and a connected speaker.
 constexpr size_t kRingBytes = 16 * 1024;
 // Start sending a clip only once this much is buffered (~46 ms), so the first callback
 // after a tap does not count as an underrun.
@@ -74,17 +72,6 @@ struct Command {
 
 Ring ring;
 QueueHandle_t commands = nullptr;  // length 1, overwritten: the latest tap wins
-// The decoder (~30 KB in several pieces) is allocated once at boot and kept. Allocating it per
-// clip failed on the board once the heap was fragmented by Wi-Fi and Bluetooth.
-class Decoder : public libhelix::MP3DecoderHelix {
- public:
-  // Drop buffered input so the next write() starts a new clip; keeps the memory.
-  void restart() {
-    frame_buffer.reset();
-    frame_counter = 0;
-  }
-};
-Decoder mp3;
 File file;
 
 portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
@@ -104,8 +91,24 @@ volatile uint32_t plays = 0;
 volatile uint32_t underruns = 0;
 volatile uint32_t fills = 0;       // A2DP data callbacks so far
 volatile bool stalled = false;     // the speaker stopped taking audio mid-clip
-bool warnedRate = false;
-bool decoderOk = false;
+// Clips are WAV files: IMA ADPCM (what tools/audio produces, 4 bits a sample, no decoder
+// memory) or plain 16-bit PCM, mono, any sample rate up to 44.1 kHz. The Helix MP3 decoder
+// needed ~30 KB of heap, which with Wi-Fi and a connected speaker left the Bluetooth stack
+// too little to keep streaming.
+struct Clip {
+  bool adpcm = false;
+  uint32_t rate = 0;
+  uint16_t blockAlign = 0;   // ADPCM: bytes per block (4-byte header + nibbles)
+  uint32_t dataLeft = 0;     // bytes of the data chunk not read yet
+  // resampler to 44.1 kHz (linear interpolation)
+  uint32_t step = 0;         // input samples per output sample, Q16
+  uint32_t phase = 0;        // Q16 position between prev and cur
+  int16_t prev = 0, cur = 0;
+  bool started = false;
+} clip;
+
+int16_t outBuf[256];
+size_t outCount = 0;
 
 void updateGain() {
   // Squared curve: sounds roughly linear to the ear and reaches 0 at 0.
@@ -116,35 +119,22 @@ void updateGain() {
 // True when decoder output should be thrown away: the clip is being closed or replaced.
 bool shouldDrop() { return aborting || uxQueueMessagesWaiting(commands) > 0; }
 
-// Decoder output: downmix to mono and push into the ring. Blocks while the ring is full,
-// but gives up as soon as a new command arrives so taps stay responsive. Waiting matters only
-// when the speaker is slower than the decoder; if the speaker is gone the web layer refuses plays.
-void onPcm(MP3FrameInfo &info, short *pcm, size_t samples, void *) {
-  if (info.samprate != kSampleRate && !warnedRate) {
-    warnedRate = true;
-    log_w("clip is %d Hz, expected %d Hz: it will play at the wrong speed", info.samprate, kSampleRate);
-  }
-  size_t frames = samples;
-  if (info.nChans == 2) {
-    frames = samples / 2;
-    for (size_t i = 0; i < frames; i++) {
-      pcm[i] = (short)(((int32_t)pcm[2 * i] + pcm[2 * i + 1]) / 2);
-    }
-  }
+// Pushes PCM into the ring. Blocks while the ring is full, but gives up as soon as a new
+// command arrives so taps stay responsive. If nothing drains for 2 s the speaker has stopped
+// pulling audio; give up on the clip instead of waiting forever.
+void writePcm(const int16_t *pcm, size_t samples) {
   const uint8_t *p = (const uint8_t *)pcm;
-  size_t left = frames * sizeof(short);
+  size_t left = samples * sizeof(int16_t);
   uint32_t waits = 0;
   while (left > 0) {
     if (shouldDrop() || stalled) return;
     size_t sent = ring.write(p, left);
     if (sent == 0) {
-      // Ring full: ~5 ms of audio drains meanwhile. If nothing drains for 2 s the speaker has
-      // stopped pulling audio; give up on the clip instead of waiting forever.
       if (++waits > 400) {
         stalled = true;
         return;
       }
-      vTaskDelay(pdMS_TO_TICKS(5));
+      vTaskDelay(pdMS_TO_TICKS(5));  // ~5 ms of audio drains meanwhile
       continue;
     }
     waits = 0;
@@ -153,11 +143,132 @@ void onPcm(MP3FrameInfo &info, short *pcm, size_t samples, void *) {
   }
 }
 
+void flushOut() {
+  if (outCount) writePcm(outBuf, outCount);
+  outCount = 0;
+}
+
+// One decoded input sample in; zero or more 44.1 kHz samples out.
+void pushSample(int16_t x) {
+  if (!clip.started) {
+    clip.prev = clip.cur = x;
+    clip.started = true;
+  }
+  clip.prev = clip.cur;
+  clip.cur = x;
+  while (clip.phase < 65536) {
+    int32_t y = clip.prev + (((int32_t)(clip.cur - clip.prev) * (int32_t)clip.phase) >> 16);
+    outBuf[outCount++] = (int16_t)y;
+    if (outCount == sizeof(outBuf) / sizeof(outBuf[0])) flushOut();
+    clip.phase += clip.step;
+  }
+  clip.phase -= 65536;
+}
+
+const int8_t kIndexTable[16] = {-1, -1, -1, -1, 2, 4, 6, 8, -1, -1, -1, -1, 2, 4, 6, 8};
+const int16_t kStepTable[89] = {
+    7,     8,     9,     10,    11,    12,    13,    14,    16,    17,    19,    21,    23,    25,    28,
+    31,    34,    37,    41,    45,    50,    55,    60,    66,    73,    80,    88,    97,    107,   118,
+    130,   143,   157,   173,   190,   209,   230,   253,   279,   307,   337,   371,   408,   449,   494,
+    544,   598,   658,   724,   796,   876,   963,   1060,  1166,  1282,  1411,  1552,  1707,  1878,  2066,
+    2272,  2499,  2749,  3024,  3327,  3660,  4026,  4428,  4871,  5358,  5894,  6484,  7132,  7845,  8630,
+    9493,  10442, 11487, 12635, 13899, 15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794, 32767};
+
+// Decodes one IMA ADPCM block (WAV layout, mono): predictor, step index, then 4-bit codes,
+// low nibble first.
+void decodeAdpcmBlock(const uint8_t *b, size_t len) {
+  if (len < 4) return;
+  int32_t pred = (int16_t)(b[0] | (b[1] << 8));
+  int index = b[2] > 88 ? 88 : b[2];
+  pushSample((int16_t)pred);
+  for (size_t i = 4; i < len; i++) {
+    for (int half = 0; half < 2; half++) {
+      uint8_t code = half ? (b[i] >> 4) : (b[i] & 0x0F);
+      int step = kStepTable[index];
+      int32_t diff = step >> 3;
+      if (code & 4) diff += step;
+      if (code & 2) diff += step >> 1;
+      if (code & 1) diff += step >> 2;
+      pred += (code & 8) ? -diff : diff;
+      if (pred > 32767) pred = 32767;
+      if (pred < -32768) pred = -32768;
+      index += kIndexTable[code];
+      if (index < 0) index = 0;
+      if (index > 88) index = 88;
+      pushSample((int16_t)pred);
+    }
+  }
+}
+
+uint16_t rd16(const uint8_t *p) { return p[0] | (p[1] << 8); }
+uint32_t rd32(const uint8_t *p) { return p[0] | (p[1] << 8) | (p[2] << 16) | ((uint32_t)p[3] << 24); }
+
+// Reads the WAV header up to the data chunk. Returns false (and logs) on a file we can't play.
+bool openWav(const char *path) {
+  uint8_t h[12];
+  if (file.read(h, 12) != 12 || memcmp(h, "RIFF", 4) || memcmp(h + 8, "WAVE", 4)) {
+    log_e("%s is not a WAV file", path);
+    return false;
+  }
+  clip = Clip();
+  bool haveFmt = false;
+  uint16_t channels = 0, bits = 0, format = 0;
+  for (;;) {
+    uint8_t c[8];
+    if (file.read(c, 8) != 8) break;
+    uint32_t size = rd32(c + 4);
+    if (!memcmp(c, "fmt ", 4) && size >= 16) {
+      uint8_t f[16];
+      if (file.read(f, 16) != 16) break;
+      format = rd16(f);
+      channels = rd16(f + 2);
+      clip.rate = rd32(f + 4);
+      clip.blockAlign = rd16(f + 12);
+      bits = rd16(f + 14);
+      file.seek(file.position() + size - 16 + (size & 1));
+      haveFmt = true;
+    } else if (!memcmp(c, "data", 4)) {
+      clip.dataLeft = size;
+      break;
+    } else {
+      file.seek(file.position() + size + (size & 1));
+    }
+  }
+  clip.adpcm = format == 0x11;
+  bool ok = haveFmt && clip.dataLeft > 0 && channels == 1 && clip.rate >= 8000 && clip.rate <= kSampleRate &&
+            ((clip.adpcm && bits == 4 && clip.blockAlign > 4 && clip.blockAlign <= kReadChunk * 4) ||
+             (format == 1 && bits == 16));
+  if (!ok) {
+    log_e("%s: need mono IMA ADPCM or 16-bit PCM WAV at 8-44.1 kHz (format %u, %u ch, %u bits, %u Hz)", path,
+          format, channels, bits, (unsigned)clip.rate);
+    return false;
+  }
+  clip.step = (uint32_t)(((uint64_t)clip.rate << 16) / kSampleRate);
+  return true;
+}
+
+// Decodes the next piece of the clip. Returns false at the end of the data.
+bool decodeSome() {
+  static uint8_t buf[kReadChunk * 4];  // one ADPCM block (ffmpeg writes 1024-byte blocks)
+  if (clip.dataLeft == 0) return false;
+  size_t want = clip.adpcm ? clip.blockAlign : kReadChunk;
+  if (want > clip.dataLeft) want = clip.dataLeft;
+  size_t n = file.read(buf, want);
+  if (n == 0) return false;
+  clip.dataLeft -= n;
+  if (clip.adpcm) {
+    decodeAdpcmBlock(buf, n);
+  } else {
+    for (size_t i = 0; i + 1 < n; i += 2) pushSample((int16_t)rd16(buf + i));
+  }
+  return true;
+}
+
 void closeCurrent() {
   playing = false;  // the A2DP callback stops reading the ring
   aborting = true;
   if (file) file.close();
-  mp3.restart();
+  outCount = 0;
   aborting = false;
   decodeDone = true;
   ring.reset();
@@ -168,13 +279,13 @@ void closeCurrent() {
 
 void startClip(const char *id) {
   char path[48];
-  snprintf(path, sizeof(path), "/sounds/%s.mp3", id);
+  snprintf(path, sizeof(path), "/sounds/%s.wav", id);
   file = LittleFS.open(path, "r");
   if (!file) {
     log_e("cannot open %s", path);
     return;
   }
-  if (!decoderOk) {
+  if (!openWav(path)) {
     file.close();
     return;
   }
@@ -190,7 +301,6 @@ void startClip(const char *id) {
 }
 
 void task(void *) {
-  static uint8_t buf[kReadChunk];
   Command cmd;
   for (;;) {
     // Decoding: poll so decoding keeps going. Draining: wake every 10 ms to notice the end.
@@ -218,11 +328,8 @@ void task(void *) {
       stalled = false;
       continue;
     }
-    size_t n = file.read(buf, sizeof(buf));
-    if (n > 0) {
-      mp3.write(buf, n);
-    } else {
-      mp3.flush();  // decode the last frames
+    if (!decodeSome()) {
+      flushOut();
       file.close();
       decodeDone = true;  // the A2DP callback clears `playing` once the ring drains
     }
@@ -240,11 +347,8 @@ void begin() {
 
   if (!ring.begin(kRingBytes)) log_e("no memory for the %u byte audio ring", (unsigned)kRingBytes);
   commands = xQueueCreate(1, sizeof(Command));
-  mp3.setDataCallback(onPcm);
-  decoderOk = mp3.begin();
-  if (!decoderOk) log_e("no memory for the MP3 decoder (free heap %u)", (unsigned)ESP.getFreeHeap());
   // Core 1 (Arduino side); Bluetooth runs on core 0. Priority above loop() and the web server.
-  xTaskCreatePinnedToCore(task, "player", 5120, nullptr, 5, nullptr, 1);
+  xTaskCreatePinnedToCore(task, "player", 4096, nullptr, 5, nullptr, 1);
 }
 
 bool play(const char *id) {

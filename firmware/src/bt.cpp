@@ -110,10 +110,9 @@ void setCoex(esp_coex_prefer_t p) {
 
 void onState(esp_a2d_connection_state_t state, void *) {
   Serial.printf("speaker %s\n", a2dp.to_str(state));
-  // While searching, give Wi-Fi the radio so phones can still join. Once connected, the audio
-  // stream needs it more than the page's small requests do: under BALANCE the stream stalled
-  // as soon as a call started with a phone on the page.
-  setCoex(state == ESP_A2D_CONNECTION_STATE_CONNECTED ? ESP_COEX_PREFER_BT : ESP_COEX_PREFER_WIFI);
+  // While searching, give Wi-Fi the radio so phones can still join; once connected, share it.
+  // (Preferring Bluetooth starved Wi-Fi: the page's requests stopped reaching the ESP32.)
+  setCoex(state == ESP_A2D_CONNECTION_STATE_CONNECTED ? ESP_COEX_PREFER_BALANCE : ESP_COEX_PREFER_WIFI);
 }
 
 void onAudio(esp_a2d_audio_state_t state, void *) {
