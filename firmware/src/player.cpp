@@ -102,6 +102,8 @@ uint32_t volumeChangedMs = 0;
 volatile int32_t gainQ15 = 0;      // volume as a Q15 multiplier
 volatile uint32_t plays = 0;
 volatile uint32_t underruns = 0;
+volatile uint32_t fills = 0;       // A2DP data callbacks so far
+volatile bool stalled = false;     // the speaker stopped taking audio mid-clip
 bool warnedRate = false;
 bool decoderOk = false;
 
@@ -131,13 +133,21 @@ void onPcm(MP3FrameInfo &info, short *pcm, size_t samples, void *) {
   }
   const uint8_t *p = (const uint8_t *)pcm;
   size_t left = frames * sizeof(short);
+  uint32_t waits = 0;
   while (left > 0) {
-    if (shouldDrop()) return;
+    if (shouldDrop() || stalled) return;
     size_t sent = ring.write(p, left);
     if (sent == 0) {
-      vTaskDelay(pdMS_TO_TICKS(5));  // ring full: ~5 ms of audio drains meanwhile
+      // Ring full: ~5 ms of audio drains meanwhile. If nothing drains for 2 s the speaker has
+      // stopped pulling audio; give up on the clip instead of waiting forever.
+      if (++waits > 400) {
+        stalled = true;
+        return;
+      }
+      vTaskDelay(pdMS_TO_TICKS(5));
       continue;
     }
+    waits = 0;
     p += sent;
     left -= sent;
   }
@@ -171,6 +181,7 @@ void startClip(const char *id) {
   portENTER_CRITICAL(&lock);
   strlcpy(current, id, sizeof(current));
   portEXIT_CRITICAL(&lock);
+  stalled = false;
   gen = gen + 1;  // before `playing`, so the callback never pairs the new clip with an old gen
   decodeDone = false;
   playing = true;
@@ -194,10 +205,17 @@ void task(void *) {
     if (!file) {
       if (playing && decodeDone && drainedGen == gen) {
         playing = false;  // the clip has fully played out
+        Serial.printf("done %s\n", current);
         portENTER_CRITICAL(&lock);
         current[0] = 0;
         portEXIT_CRITICAL(&lock);
       }
+      continue;
+    }
+    if (stalled) {
+      Serial.printf("speaker stopped taking audio (callbacks %u), dropping %s\n", (unsigned)fills, current);
+      closeCurrent();
+      stalled = false;
       continue;
     }
     size_t n = file.read(buf, sizeof(buf));
@@ -275,6 +293,7 @@ Stats stats() {
   s.underruns = underruns;
   s.bufferedBytes = ring.available();
   s.bufferSize = kRingBytes;
+  s.fills = fills;
   return s;
 }
 
@@ -282,6 +301,7 @@ int32_t fillFrames(Frame *frames, int32_t count) {
   static int16_t mono[512];
   static uint32_t primedGen = 0;  // callback-only: the clip that has passed its pre-buffer
   int32_t done = 0;
+  fills = fills + 1;
   uint32_t g = gen;  // read once: the clip this call is serving
 
   bool active = playing && drainedGen != g;

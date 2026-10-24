@@ -59,6 +59,7 @@ void sendError(AsyncWebServerRequest *req, int code, const char *msg) {
 // firmware. Turn requests away early instead; the page simply retries.
 bool lowMemory(AsyncWebServerRequest *req) {
   if (ESP.getMaxAllocHeap() >= 6144) return false;
+  Serial.printf("503 %s: low memory\n", req->url().c_str());
   req->send(503);
   return true;
 }
@@ -108,9 +109,13 @@ void handleSounds(AsyncWebServerRequest *req) {
 }
 
 void handlePlay(AsyncWebServerRequest *req) {
-  if (!bt::connected()) return sendError(req, 409, "speaker not connected");
+  if (!bt::connected()) {
+    Serial.println("tap refused: speaker not connected");
+    return sendError(req, 409, "speaker not connected");
+  }
   String id = param(req, "id");
   if (!player::play(id.c_str())) return sendError(req, 400, "bad sound id");
+  Serial.printf("tap %s\n", id.c_str());
   sendOk(req);
 }
 

@@ -13,6 +13,7 @@ struct Stats {
   uint32_t underruns;     // callbacks that found the buffer empty mid-clip
   uint32_t bufferedBytes; // PCM bytes waiting in the ring buffer
   uint32_t bufferSize;
+  uint32_t fills;         // A2DP data callbacks so far (should rise ~350/s while connected)
 };
 
 void begin();                        // start the decode task (after LittleFS is mounted)
