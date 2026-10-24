@@ -18,9 +18,12 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.platformio
-          key: pio-${{ hashFiles('firmware/platformio.ini') }}
-      # pioarduino's ESP-IDF build calls click.parser.split_arg_string, which newer click breaks
-      - run: pip install platformio "click<8.2"
+          key: pio-6.1.19-${{ hashFiles('firmware/platformio.ini') }}
+      # Pinned for the pioarduino ESP-IDF rebuild (custom_sdkconfig):
+      # - PlatformIO 6.1.19 wants SCons 4.8.1, the version the platform installs; newer cores
+      #   want 4.11.1 and the platform swaps it out mid-build ("No module named SCons.Tool...")
+      # - the build calls click.parser.split_arg_string, which click 8.2+ breaks
+      - run: pip install "platformio==6.1.19" "click<8.2"
       # Builds the app and fails if it is over the 2.25 MB budget (scripts/check_size.py)
       - run: pio run -d firmware
       # The LittleFS image builds even without the (non-redistributable) sounds
