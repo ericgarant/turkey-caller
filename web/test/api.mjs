@@ -70,12 +70,13 @@ try {
     assert.equal((await get("/api/status")).playing, false);
   });
   await step("volume clamps to 0..100 and needs a level", async () => {
+    const before = (await get("/api/status")).volume; // put it back afterwards, also on the board
     await post("/api/volume", { level: "150" });
     assert.equal((await get("/api/status")).volume, 100);
     await post("/api/volume", { level: "-20" });
     assert.equal((await get("/api/status")).volume, 0);
     assert.equal((await post("/api/volume")).code, 400);
-    await post("/api/volume", { level: "60" });
+    await post("/api/volume", { level: String(before) });
   });
   await step("upload and delete are refused while playing (409)", async () => {
     await post("/api/play", { id: "assembly_yelp", loop: "1" });

@@ -1,7 +1,7 @@
 // Rapid-tap stress test. Same script for the mock and the real board.
 //   node test/stress.mjs                          starts the mock and runs against it
 //   node test/stress.mjs http://192.168.4.1       runs against the board (join its Wi-Fi first)
-// Options (env): TAPS=50  GAP_MS=150 (the firmware page'"'"'s own stress test uses 150 ms)
+// Options (env): TAPS=50  GAP_MS=150 (the firmware page's own stress test uses 150 ms)
 // Soak: TAPS=360 GAP_MS=20000 node test/stress.mjs http://192.168.4.1   (2 hours, calls in order)
 // Pass = 0 failed requests, 0 new underruns during the run, no reboot, lowest heap since boot >= 40 KB
 // (docs/architecture.md, Phase 0).
