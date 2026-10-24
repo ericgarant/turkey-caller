@@ -161,7 +161,7 @@ nav button[aria-current="page"]{color:var(--accent)}
         <div class="card">
           <div class="meter" aria-hidden="true"><i id="fsBar"></i></div>
           <ul class="list" id="sndList"></ul>
-          <div class="field" style="margin-top:10px">
+          <div class="field" id="upField" style="margin-top:10px" hidden>
             <label for="upFile">Add a sound</label>
             <input type="file" id="upFile" accept=".wav,audio/wav">
             <span class="sub" id="upNote">Mono WAV, IMA ADPCM, 22.05 kHz (made by tools/audio). The file name becomes the button name. Not possible while a call is playing.</span>
@@ -382,8 +382,11 @@ forget.onclick=async()=>{
 };
 
 // ---- Settings: sounds ----
+// Adding and deleting sounds from the phone is deferred (F03), so those controls stay hidden.
+const EDIT_SOUNDS=false;
+$("upField").hidden=!EDIT_SOUNDS;
 function renderSounds(){
-  $("sndList").innerHTML=sounds.map(s=>`<li><div class="grow"><div class="nm">${esc(s.name)}</div><div class="sub mono">${esc(s.id)}.wav${s.ms?" · "+fmtS(s.ms):""}${s.bytes?" · "+fmtKB(s.bytes):""}</div></div><button class="btn danger" type="button" data-del="${esc(s.id)}">Delete</button></li>`).join("");
+  $("sndList").innerHTML=sounds.map(s=>`<li><div class="grow"><div class="nm">${esc(s.name)}</div><div class="sub mono">${esc(s.id)}.wav${s.ms?" · "+fmtS(s.ms):""}${s.bytes?" · "+fmtKB(s.bytes):""}</div></div>${EDIT_SOUNDS?`<button class="btn danger" type="button" data-del="${esc(s.id)}">Delete</button>`:""}</li>`).join("");
   $("sndList").querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{
     if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Tap to confirm";setTimeout(()=>{if(b.isConnected){delete b.dataset.armed;b.textContent="Delete"}},3000);return}
     b.disabled=true;
