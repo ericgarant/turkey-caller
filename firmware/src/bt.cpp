@@ -80,6 +80,8 @@ volatile bool discovering = false;  // an inquiry is running
 volatile bool searchRequested = false;
 volatile bool restartAudio = false;  // ask the speaker to resume the stream (set from callbacks)
 uint32_t seenStalls = 0;
+volatile bool audioStarted = false;  // the speaker is taking the audio stream
+volatile uint32_t connectedMs = 0;   // when the speaker last connected (0 = not connected)
 
 void remember(const char *name, esp_bd_addr_t a, int rssi) {
   char addr[18];
@@ -119,12 +121,19 @@ void setCoex(esp_coex_prefer_t p) {
 
 void onState(esp_a2d_connection_state_t state, void *) {
   Serial.printf("speaker %s\n", a2dp.to_str(state));
+  if (state == ESP_A2D_CONNECTION_STATE_CONNECTED) {
+    audioStarted = false;
+    connectedMs = millis() | 1;
+  } else if (state == ESP_A2D_CONNECTION_STATE_DISCONNECTED) {
+    connectedMs = 0;
+  }
   // The radio preference itself is set in loop(), which also watches for phones.
 }
 
 void onAudio(esp_a2d_audio_state_t state, void *) {
   // Some speakers suspend the stream while staying connected; taps would then play nothing.
   if (state == ESP_A2D_AUDIO_STATE_SUSPEND && a2dp.is_connected()) restartAudio = true;
+  audioStarted = state == ESP_A2D_AUDIO_STATE_STARTED;
   Serial.printf("speaker audio %s\n", state == ESP_A2D_AUDIO_STATE_STARTED ? "started"
                                         : state == ESP_A2D_AUDIO_STATE_SUSPEND ? "suspended" : "stopped");
 }
@@ -182,6 +191,22 @@ void loop() {
     lastCoexCheck = millis();
     setCoex(a2dp.is_connected() && WiFi.softAPgetStationNum() > 0 ? ESP_COEX_PREFER_BALANCE
                                                                    : ESP_COEX_PREFER_WIFI);
+  }
+  // Sometimes the stream never starts after a connect, and the first tap would be lost to the
+  // stall check. Ask for it every 3 s until the speaker reports the audio started.
+  // Gives up after 5 asks per connect, in case a speaker streams without reporting it.
+  static uint32_t lastStartAsk = 0, askedFor = 0;
+  static int asks = 0;
+  uint32_t since = connectedMs;
+  if (since != askedFor) {
+    askedFor = since;
+    asks = 0;
+  }
+  if (since && !audioStarted && asks < 5 && millis() - since > 2000 && millis() - lastStartAsk > 3000) {
+    lastStartAsk = millis();
+    asks++;
+    Serial.println("speaker connected but its audio did not start");
+    restartAudio = true;
   }
   // A clip stalled (the speaker stopped pulling audio) or the speaker suspended the stream:
   // ask it to start again. If that doesn't help, the next stall asks again.

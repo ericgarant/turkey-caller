@@ -10,7 +10,7 @@ namespace {
 constexpr size_t kMaxSounds = 40;
 constexpr size_t kMaxIndexBytes = 4096;
 
-Sound sounds[kMaxSounds];
+Sound *sounds = nullptr;  // exactly `n` entries on the heap: a fixed 40-entry table cost ~3 KB of RAM
 size_t n = 0;
 uint32_t freeBytes = 0, totalBytes = 0;
 portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
@@ -103,7 +103,12 @@ bool validId(const char *id) {
 
 void begin() {
   size_t count = 0;
-  static Sound found[kMaxSounds];  // static: ~2.6 KB kept off the loop task's stack
+  // Scratch list while scanning (~3 KB), freed before the radios start.
+  Sound *found = (Sound *)calloc(kMaxSounds, sizeof(Sound));
+  if (!found) {
+    Serial.println("library: out of memory");
+    return;
+  }
 
   // 1. Sounds named in the index, in its order, when their file exists and plays.
   File idx = LittleFS.open("/sounds/index.json", "r");
@@ -153,16 +158,27 @@ void begin() {
   }
 
   uint32_t total = LittleFS.totalBytes(), used = LittleFS.usedBytes();
+  Sound *list = count ? (Sound *)malloc(count * sizeof(Sound)) : nullptr;
+  if (list) memcpy(list, found, count * sizeof(Sound));
+  else count = 0;
+  free(found);
   portENTER_CRITICAL(&lock);
-  memcpy(sounds, found, count * sizeof(Sound));
+  Sound *old = sounds;
+  sounds = list;
   n = count;
   totalBytes = total;
   freeBytes = total > used ? total - used : 0;
   portEXIT_CRITICAL(&lock);
+  free(old);
   Serial.printf("library: %u sounds, %u of %u bytes free\n", (unsigned)count, (unsigned)freeBytes, (unsigned)totalBytes);
 }
 
-size_t count() { return n; }
+size_t count() {
+  portENTER_CRITICAL(&lock);
+  size_t c = n;
+  portEXIT_CRITICAL(&lock);
+  return c;
+}
 
 bool get(size_t i, Sound &out) {
   portENTER_CRITICAL(&lock);
