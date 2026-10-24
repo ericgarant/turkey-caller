@@ -4,6 +4,7 @@
 #include <Preferences.h>
 #include <esp32-hal-bt.h>
 #include <esp_coexist.h>
+#include <WiFi.h>
 
 #include "player.h"
 
@@ -103,7 +104,13 @@ bool onFound(const char *name, esp_bd_addr_t addr, int rssi) {
   return match;
 }
 
+esp_coex_prefer_t coexNow = ESP_COEX_PREFER_BALANCE;
+bool coexSet = false;
+
 void setCoex(esp_coex_prefer_t p) {
+  if (coexSet && p == coexNow) return;
+  coexSet = true;
+  coexNow = p;
   esp_err_t err = esp_coex_preference_set(p);
   Serial.printf("radio preference %s: %s\n",
                 p == ESP_COEX_PREFER_BT ? "bluetooth" : p == ESP_COEX_PREFER_WIFI ? "wifi" : "balance",
@@ -112,9 +119,7 @@ void setCoex(esp_coex_prefer_t p) {
 
 void onState(esp_a2d_connection_state_t state, void *) {
   Serial.printf("speaker %s\n", a2dp.to_str(state));
-  // While searching, give Wi-Fi the radio so phones can still join; once connected, share it.
-  // (Preferring Bluetooth starved Wi-Fi: the page's requests stopped reaching the ESP32.)
-  setCoex(state == ESP_A2D_CONNECTION_STATE_CONNECTED ? ESP_COEX_PREFER_BALANCE : ESP_COEX_PREFER_WIFI);
+  // The radio preference itself is set in loop(), which also watches for phones.
 }
 
 void onAudio(esp_a2d_audio_state_t state, void *) {
@@ -168,6 +173,16 @@ void begin() {
 void requestSearch() { searchRequested = true; }
 
 void loop() {
+  // Wi-Fi gets the radio unless a speaker is connected AND a phone is on the access point.
+  // A connected speaker streams continuously (silence too), and under BALANCE phones failed to
+  // join ("Connection failed"). With nobody joined there is nothing to play, so Wi-Fi first;
+  // once a phone has joined, share the radio so the audio stays smooth.
+  static uint32_t lastCoexCheck = 0;
+  if (millis() - lastCoexCheck >= 500) {
+    lastCoexCheck = millis();
+    setCoex(a2dp.is_connected() && WiFi.softAPgetStationNum() > 0 ? ESP_COEX_PREFER_BALANCE
+                                                                   : ESP_COEX_PREFER_WIFI);
+  }
   // A clip stalled (the speaker stopped pulling audio) or the speaker suspended the stream:
   // ask it to start again. If that doesn't help, the next stall asks again.
   uint32_t st = player::stats().stalls;
