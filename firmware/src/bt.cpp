@@ -6,6 +6,7 @@
 #include <esp_coexist.h>
 #include <WiFi.h>
 
+#include "heapmon.h"
 #include "player.h"
 
 namespace bt {
@@ -121,7 +122,7 @@ void setCoex(esp_coex_prefer_t p) {
 }
 
 void onState(esp_a2d_connection_state_t state, void *) {
-  Serial.printf("speaker %s\n", a2dp.to_str(state));
+  Serial.printf("speaker %s heap=%u low=%u\n", a2dp.to_str(state), (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince());
   if (state == ESP_A2D_CONNECTION_STATE_CONNECTING) {
     connectingMs = millis() | 1;
   } else if (state == ESP_A2D_CONNECTION_STATE_CONNECTED) {
@@ -140,8 +141,9 @@ void onAudio(esp_a2d_audio_state_t state, void *) {
   // Some speakers suspend the stream while staying connected; taps would then play nothing.
   if (state == ESP_A2D_AUDIO_STATE_SUSPEND && a2dp.is_connected()) restartAudio = true;
   audioStarted = state == ESP_A2D_AUDIO_STATE_STARTED;
-  Serial.printf("speaker audio %s\n", state == ESP_A2D_AUDIO_STATE_STARTED ? "started"
-                                        : state == ESP_A2D_AUDIO_STATE_SUSPEND ? "suspended" : "stopped");
+  Serial.printf("speaker audio %s heap=%u low=%u\n", state == ESP_A2D_AUDIO_STATE_STARTED ? "started"
+                                        : state == ESP_A2D_AUDIO_STATE_SUSPEND ? "suspended" : "stopped",
+                (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince());
 }
 
 void onDiscovery(esp_bt_gap_discovery_state_t st) {

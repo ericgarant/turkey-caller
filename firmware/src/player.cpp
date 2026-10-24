@@ -1,5 +1,7 @@
 #include "player.h"
 
+#include "heapmon.h"
+
 #include <LittleFS.h>
 #include <Preferences.h>
 #include <freertos/queue.h>
@@ -283,7 +285,8 @@ void startClip(const char *id, bool loop) {
   decodeDone = false;
   playing = true;
   plays = plays + 1;
-  Serial.printf("play %s heap=%u block=%u\n", id, (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
+  Serial.printf("play %s heap=%u block=%u low=%u\n", id, (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap(),
+                (unsigned)heapmon::lowSince());
 }
 
 void task(void *) {

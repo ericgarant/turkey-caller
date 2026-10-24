@@ -6,6 +6,7 @@
 #include <WiFi.h>
 
 #include "bt.h"
+#include "heapmon.h"
 #include "library.h"
 #include "player.h"
 #include "version.h"
@@ -106,7 +107,7 @@ String statusJson() {
   j += ",\"len_ms\":" + String(p.lenMs);
   j += ",\"volume\":" + String(p.volume);
   j += ",\"heap\":" + String(ESP.getFreeHeap());
-  j += ",\"minHeap\":" + String(ESP.getMinFreeHeap());
+  j += ",\"minHeap\":" + String(heapmon::minEver());
   j += ",\"maxBlock\":" + String(ESP.getMaxAllocHeap());
   j += ",\"fsFree\":" + String(library::fsFree());
   j += ",\"fsTotal\":" + String(library::fsTotal());
@@ -213,9 +214,11 @@ volatile bool pushNow = false;  // something changed: push status on the next lo
 void setRepeat(bool on) {
   repeatOn = on;
   player::setLoop(on);
-  Serial.printf("repeat %s heap=%u min=%u\n", on ? "on" : "off", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMinFreeHeap());
+  Serial.printf("repeat %s heap=%u low=%u\n", on ? "on" : "off", (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince());
   pushNow = true;
 }
+
+void logStop() { Serial.printf("stop heap=%u low=%u\n", (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince()); }
 
 void onCommand(const char *msg) {
   if (strstr(msg, "\"cmd\":\"volume\"")) {
@@ -225,6 +228,7 @@ void onCommand(const char *msg) {
       pushNow = true;
     }
   } else if (strstr(msg, "\"cmd\":\"stop\"")) {
+    logStop();
     player::stop();
     pushNow = true;
   } else if (strstr(msg, "\"cmd\":\"repeat\"")) {
@@ -241,8 +245,8 @@ void onWsEvent(AsyncWebSocket *, AsyncWebSocketClient *client, AwsEventType type
       client->close();
       return;
     }
-    Serial.printf("ws open #%u (%u sockets) heap=%u min=%u\n", (unsigned)client->id(), (unsigned)ws.count(),
-                  (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMinFreeHeap());
+    Serial.printf("ws open #%u (%u sockets) heap=%u low=%u\n", (unsigned)client->id(), (unsigned)ws.count(),
+                  (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince());
     pushNow = true;  // the new page wants status straight away
   } else if (type == WS_EVT_DATA) {
     AwsFrameInfo *info = (AwsFrameInfo *)arg;
@@ -319,8 +323,8 @@ void makeEtag() {
 
 void handlePage(AsyncWebServerRequest *req) {
   if (lowMemory(req)) return;
-  Serial.printf("GET / heap=%u block=%u min=%u\n", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap(),
-                (unsigned)ESP.getMinFreeHeap());
+  Serial.printf("GET / heap=%u block=%u low=%u\n", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap(),
+                (unsigned)heapmon::lowSince());
   if (req->hasHeader("If-None-Match") && req->header("If-None-Match") == etag) {
     AsyncWebServerResponse *res = req->beginResponse(304);
     res->addHeader("ETag", etag);
@@ -342,14 +346,15 @@ void begin() {
   WiFi.onEvent([](arduino_event_id_t event, arduino_event_info_t info) {
     if (event == ARDUINO_EVENT_WIFI_AP_STACONNECTED) {
       const uint8_t *m = info.wifi_ap_staconnected.mac;
-      Serial.printf("phone joined %02x:%02x:%02x:%02x:%02x:%02x min=%u\n", m[0], m[1], m[2], m[3], m[4], m[5],
-                    (unsigned)ESP.getMinFreeHeap());
+      Serial.printf("phone joined %02x:%02x:%02x:%02x:%02x:%02x heap=%u low=%u\n", m[0], m[1], m[2], m[3], m[4], m[5],
+                    (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince());
     } else if (event == ARDUINO_EVENT_WIFI_AP_STADISCONNECTED) {
       const uint8_t *m = info.wifi_ap_stadisconnected.mac;
       Serial.printf("phone left %02x:%02x:%02x:%02x:%02x:%02x reason %u\n", m[0], m[1], m[2], m[3], m[4], m[5],
                     (unsigned)info.wifi_ap_stadisconnected.reason);
     } else if (event == ARDUINO_EVENT_WIFI_AP_STAIPASSIGNED) {
-      Serial.printf("phone got ip %s\n", IPAddress(info.wifi_ap_staipassigned.ip.addr).toString().c_str());
+      Serial.printf("phone got ip %s heap=%u low=%u\n", IPAddress(info.wifi_ap_staipassigned.ip.addr).toString().c_str(),
+                    (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince());
     }
   });
   WiFi.mode(WIFI_AP);
@@ -393,6 +398,7 @@ void begin() {
   server.on("/api/config", HTTP_ANY, notYet);          // F05
   server.on("/api/play", HTTP_POST, handlePlay);
   server.on("/api/stop", HTTP_POST, [](AsyncWebServerRequest *req) {
+    logStop();
     player::stop();
     sendOk(req);
   });
@@ -420,6 +426,9 @@ void begin() {
   });
   // Captive portal: phones probe random URLs; send them all to the page.
   server.onNotFound([](AsyncWebServerRequest *req) {
+    // Logged with the heap to see what a phone's join-time probes cost (F10).
+    Serial.printf("probe %s%s heap=%u low=%u\n", req->host().c_str(), req->url().c_str(), (unsigned)ESP.getFreeHeap(),
+                  (unsigned)heapmon::lowSince());
     if (req->url().startsWith("/api/")) return sendError(req, 404, "not found");
     req->redirect("http://" + WiFi.softAPIP().toString() + "/");
   });

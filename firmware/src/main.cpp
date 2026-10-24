@@ -3,6 +3,7 @@
 #include <LittleFS.h>
 
 #include "bt.h"
+#include "heapmon.h"
 #include "library.h"
 #include "player.h"
 #include "version.h"
@@ -32,6 +33,7 @@ void setup() {
   heapLog("bluetooth");
   web::begin();
   heapLog("wifi+web");
+  heapmon::begin();
   Serial.printf("Ready. Join Wi-Fi \"TurkeyCaller\" (password gobble123), open http://192.168.4.1\n");
 }
 
@@ -45,11 +47,11 @@ void loop() {
     last = millis();
     player::Stats p = player::stats();
     static uint32_t lastFills = 0;
-    Serial.printf("[%lus] clients=%d req=%d bt=%s playing=%s plays=%u underruns=%u buf=%u fills=+%u heap=%u min=%u block=%u\n",
+    Serial.printf("[%lus] clients=%d req=%d bt=%s playing=%s plays=%u underruns=%u buf=%u fills=+%u heap=%u min=%u low=%u block=%u\n",
                   (unsigned long)(millis() / 1000), web::clients(), web::requestsInFlight(), bt::state(), p.playing ? p.current : "-",
                   (unsigned)p.plays, (unsigned)p.underruns, (unsigned)p.bufferedBytes,
                   (unsigned)(p.fills - lastFills), (unsigned)ESP.getFreeHeap(),
-                  (unsigned)ESP.getMinFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
+                  (unsigned)heapmon::minEver(), (unsigned)heapmon::lowSince(), (unsigned)ESP.getMaxAllocHeap());
     lastFills = p.fills;
   }
   delay(5);
