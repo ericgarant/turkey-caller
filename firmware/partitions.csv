@@ -1,7 +1,8 @@
 # Data partition is labeled spiffs (Arduino/PlatformIO default) but formatted as LittleFS.
+# 2.5 MB app, 1.375 MB LittleFS (the clips need ~0.6 MB), 64 KB coredump. No OTA.
 # Name,   Type, SubType,  Offset,   Size
 nvs,      data, nvs,      0x9000,   0x5000
 phy_init, data, phy,      0xE000,   0x1000
-factory,  app,  factory,  0x10000,  0x200000
-spiffs,   data, spiffs,   0x210000, 0x1E0000
+factory,  app,  factory,  0x10000,  0x280000
+spiffs,   data, spiffs,   0x290000, 0x160000
 coredump, data, coredump, 0x3F0000, 0x10000

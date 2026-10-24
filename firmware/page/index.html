@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Turkey Caller test</title>
+<style>
+:root{--bg:#1d1f1a;--card:#2a2d25;--fg:#eee8d5;--dim:#a8a28c;--acc:#c9822b;--bad:#d9534f;--ok:#6fae4a}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--bg);color:var(--fg);font:16px system-ui,sans-serif}
+h1{font-size:20px;margin:4px 0 12px}
+h2{font-size:15px;margin:0 0 8px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+section{background:var(--card);border-radius:10px;padding:12px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+button{font:inherit;color:var(--fg);background:#3b3f33;border:0;border-radius:8px;padding:14px 8px;cursor:pointer}
+button:active{background:var(--acc)}
+button.playing{outline:2px solid var(--acc)}
+button.stop{background:var(--bad);width:100%;margin-top:8px}
+button.small{padding:6px 10px;font-size:14px}
+input[type=range]{width:100%}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--bad);margin-right:6px}
+.dot.on{background:var(--ok)}
+table{width:100%;font-size:14px;border-collapse:collapse}
+td{padding:2px 0}td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+#msg{color:var(--acc);min-height:1.2em;font-size:14px}
+</style>
+</head>
+<body>
+<h1>Turkey Caller &middot; Phase 0 test</h1>
+
+<section>
+  <h2>Speaker</h2>
+  <div class="row"><span><span id="dot" class="dot"></span><span id="bt">…</span></span><span id="spk"></span></div>
+  <div id="devs"></div>
+  <button class="small" id="forget">Forget speaker</button>
+</section>
+
+<section>
+  <h2>Calls</h2>
+  <div class="grid" id="sounds"></div>
+  <button class="stop" id="stop">Stop</button>
+  <div class="row"><span>Volume</span><span id="volv"></span></div>
+  <input type="range" id="vol" min="0" max="100">
+</section>
+
+<section>
+  <h2>Health</h2>
+  <table id="stats"></table>
+  <div class="row"><button class="small" id="stress">Stress test: 50 taps</button><span id="msg"></span></div>
+</section>
+
+<script>
+const $ = id => document.getElementById(id);
+let sounds = [], volTimer = null, volBusy = false;
+const say = t => $('msg').textContent = t;
+
+async function post(url, body) {
+  const r = await fetch(url, {method: 'POST', body: new URLSearchParams(body || {})});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.status);
+  return j;
+}
+
+async function play(id) {
+  try { await post('/api/play', {id}); } catch (e) { say(e.message); }
+}
+
+async function loadSounds() {
+  sounds = await (await fetch('/api/sounds')).json();
+  $('sounds').innerHTML = '';
+  if (!sounds.length) $('sounds').textContent = 'No sounds in LittleFS. Run "pio run -t uploadfs".';
+  for (const s of sounds) {
+    const b = document.createElement('button');
+    b.textContent = s.replace(/_/g, ' ');
+    b.dataset.id = s;
+    b.onclick = () => play(s);
+    $('sounds').appendChild(b);
+  }
+}
+
+let scanAt = 0;  // when "Search" was tapped: the page is slow for ~25 s while the ESP32 searches
+
+async function loadDevices(st) {
+  const box = $('devs');
+  if (st.bt === 'connected') { box.innerHTML = ''; box.dataset.key = ''; return; }
+  const list = await (await fetch('/api/bt/devices')).json();
+  const key = st.bt + JSON.stringify(list);
+  if (key === box.dataset.key) return;  // unchanged: don't redraw under the user's finger
+  box.dataset.key = key;
+  box.innerHTML = '';
+  if (st.bt === 'searching') {
+    box.innerHTML = '<div class="row" style="color:var(--dim)">Searching (about 25 s, the page may be slow)…</div>';
+  }
+  for (const d of list) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const label = document.createElement('span');
+    label.textContent = (d.name || d.addr) + ' (' + d.rssi + ' dBm)';
+    row.append(label);
+    if (d.name) {  // the ESP32 finds speakers by name, so a nameless one can't be picked
+      const b = document.createElement('button');
+      b.className = 'small';
+      b.textContent = 'Use';
+      b.onclick = async () => {
+        try { await post('/api/bt/connect', {name: d.name}); say('Saved, the ESP32 is restarting and will connect…'); } catch (e) { say(e.message); }
+      };
+      row.append(b);
+    }
+    box.appendChild(row);
+  }
+  if (st.bt === 'idle') {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = '<span style="color:var(--dim)">' + (list.length ? 'Not listed? ' : '') +
+      'Put the speaker in pairing mode, then:</span><button class="small" id="scan">Search for speakers</button>';
+    box.appendChild(row);
+    $('scan').onclick = () => { scanAt = Date.now(); post('/api/bt/scan').then(() => say('Searching…')).catch(e => say(e.message)); };
+  }
+}
+
+const kb = n => (n / 1024).toFixed(1) + ' KB';
+async function refresh() {
+  try {
+    const st = await (await fetch('/api/status')).json();
+    $('bt').textContent = st.bt;
+    $('dot').className = 'dot' + (st.bt === 'connected' ? ' on' : '');
+    $('spk').textContent = st.speaker;
+    $('forget').hidden = !st.speaker;  // nothing to forget
+    if (!volBusy && document.activeElement !== $('vol')) { $('vol').value = st.volume; $('volv').textContent = st.volume; }
+    for (const b of $('sounds').children) b.classList.toggle('playing', st.playing && b.dataset.id === st.current);
+    const rows = [
+      ['Now playing', st.playing ? st.current : '-'],
+      ['Plays', st.plays], ['Underruns (dropouts)', st.underruns],
+      ['Stalls (speaker stopped taking audio)', st.stalls],
+      ['Audio buffer', kb(st.buffered) + ' / ' + kb(st.bufferSize)],
+      ['Free heap', kb(st.heap)], ['Lowest free heap', kb(st.minHeap) + (st.minHeap < 40960 ? ' ⚠ under 40 KB' : '')],
+      ['Largest free block', kb(st.maxBlock)], ['Free storage', kb(st.fsFree)],
+      ['Wi-Fi clients', st.clients], ['Uptime', st.uptime + ' s']];
+    $('stats').innerHTML = rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('');
+    loadDevices(st);
+  } catch (e) {
+    console.error(e);
+    $('bt').textContent = Date.now() - scanAt < 40000 ? 'searching (page slow while searching)' : 'ESP32 not reachable';
+  }
+}
+
+$('stop').onclick = () => post('/api/stop').catch(e => say(e.message));
+$('forget').onclick = async () => {
+  if (!confirm('Forget the saved speaker? The ESP32 will restart.')) return;
+  await post('/api/bt/forget'); say('Forgotten, the ESP32 is restarting…'); };
+$('vol').oninput = () => {
+  $('volv').textContent = $('vol').value;
+  clearTimeout(volTimer);
+  volTimer = setTimeout(async () => { volBusy = true; await post('/api/volume', {level: $('vol').value}).catch(() => {}); volBusy = false; }, 150);
+};
+$('stress').onclick = async () => {
+  if (!sounds.length) return say('No sounds');
+  const before = await (await fetch('/api/status')).json();
+  let fails = 0;
+  for (let i = 0; i < 50; i++) {
+    say('Tap ' + (i + 1) + ' / 50');
+    try { await post('/api/play', {id: sounds[i % sounds.length]}); } catch (e) { fails++; }
+    await new Promise(r => setTimeout(r, 150));
+  }
+  const after = await (await fetch('/api/status')).json();
+  say(`Done: ${fails} failed taps, ${after.underruns - before.underruns} underruns, lowest heap ${kb(after.minHeap)}`);
+};
+
+loadSounds().catch(() => {});
+refresh();
+setInterval(refresh, 2500);
+</script>
+</body>
+</html>
