@@ -8,7 +8,7 @@ The illustrated version of this document lives at https://claude.ai/artifact/87p
 |---|---|
 | Phone ↔ ESP32 | Wi-Fi softAP + HTTP and WebSocket. Browsers cannot speak ESP-NOW. |
 | ESP32 ↔ speaker | Bluetooth Classic A2DP, ESP32 as source (ESP32-A2DP) |
-| Web app | Plain HTML/CSS/JS served gzipped from LittleFS, no internet needed |
+| Web app | Plain HTML/CSS/JS, gzipped and compiled into the firmware (`web/build.py` → `firmware/src/web_page.h`), so `uploadfs` never touches it and a page update never wipes uploaded sounds. No internet needed |
 | Audio | Mono MP3, 44.1 kHz, 64 kbps (~8 KB/s, ~3.5 min fits). Helix decoder from arduino-audio-tools |
 | Storage | `partitions.csv`: 2 MB factory app, 1.875 MB LittleFS, no OTA. The data partition is named and typed `spiffs` (the Arduino and PlatformIO default) but formatted as LittleFS (`board_build.filesystem = littlefs`), so plain `LittleFS.begin()` and `pio run -t uploadfs` work |
 | Toolchain | PlatformIO + pioarduino (Arduino core 3.x) |
@@ -45,7 +45,7 @@ One 2.4 GHz radio is time-shared between Wi-Fi and BT Classic.
 | `POST /api/bt/scan`, `GET /api/bt/devices` | Find speakers |
 | `POST /api/bt/connect {addr}`, `POST /api/bt/forget` | Pair / forget |
 | `GET/POST /api/config` | AP name, password, device name |
-| `POST /api/sounds`, `DELETE /api/sounds/:id` | Upload / remove. Refused with 409 while audio is playing (flash writes stall the decoder's flash reads) |
+| `POST /api/sounds` (multipart `file`), `POST /api/sounds/delete {id}` | Upload / remove (no path params: ESPAsyncWebServer regex routes cost ~150 KB of flash). Refused with 409 while audio is playing (flash writes stall the decoder's flash reads) |
 | `WS /ws` | Status pushes; also accepts play, stop, volume |
 
 ## Phases
