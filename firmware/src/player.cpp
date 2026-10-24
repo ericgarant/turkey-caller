@@ -265,6 +265,9 @@ void startClip(const char *id, bool loop) {
     log_e("cannot open %s", path);
     return;
   }
+  // The C library would give the open file a 4 KB read buffer. The decoder already reads whole
+  // 1 KB blocks, so a small one is enough and leaves that heap for the web server.
+  file.setBufferSize(128);
   if (!openWav(path)) {
     file.close();
     return;
