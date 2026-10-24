@@ -17,8 +17,8 @@ The illustrated version of this document lives at https://claude.ai/artifact/87p
 
 One 2.4 GHz radio is time-shared between Wi-Fi and BT Classic.
 
-- Release BLE memory at boot: `esp_bt_controller_mem_release(ESP_BT_MODE_BLE)`.
-- Decode into a ~0.5 s ring buffer feeding the A2DP data callback.
+- Decode into a ring buffer feeding the A2DP data callback. Phase 0 uses 32 KB of mono PCM (~0.37 s), the most that fits comfortably without PSRAM.
+- Start the BT controller in Classic-only mode (`btStartMode(BT_MODE_CLASSIC_BT)`) before the A2DP library starts, which releases the BLE memory.
 - Keep Wi-Fi traffic small during playback; max 2 AP clients; CPU at 240 MHz.
 - Bluetooth discovery interrupts audio, so it only runs on user request.
 
