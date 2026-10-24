@@ -132,6 +132,7 @@ async function refresh() {
     const rows = [
       ['Now playing', st.playing ? st.current : '-'],
       ['Plays', st.plays], ['Underruns (dropouts)', st.underruns],
+      ['Stalls (speaker stopped taking audio)', st.stalls],
       ['Audio buffer', kb(st.buffered) + ' / ' + kb(st.bufferSize)],
       ['Free heap', kb(st.heap)], ['Lowest free heap', kb(st.minHeap) + (st.minHeap < 40960 ? ' ⚠ under 40 KB' : '')],
       ['Largest free block', kb(st.maxBlock)], ['Free storage', kb(st.fsFree)],

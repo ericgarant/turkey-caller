@@ -91,6 +91,7 @@ volatile uint32_t plays = 0;
 volatile uint32_t underruns = 0;
 volatile uint32_t fills = 0;       // A2DP data callbacks so far
 volatile bool stalled = false;     // the speaker stopped taking audio mid-clip
+volatile uint32_t stalls = 0;
 // Clips are WAV files: IMA ADPCM (what tools/audio produces, 4 bits a sample, no decoder
 // memory) or plain 16-bit PCM, mono, any sample rate up to 44.1 kHz. The Helix MP3 decoder
 // needed ~30 KB of heap, which with Wi-Fi and a connected speaker left the Bluetooth stack
@@ -326,6 +327,7 @@ void task(void *) {
       Serial.printf("speaker stopped taking audio (callbacks %u), dropping %s\n", (unsigned)fills, current);
       closeCurrent();
       stalled = false;
+      stalls = stalls + 1;  // bt::loop() asks the speaker to restart the stream
       continue;
     }
     if (!decodeSome()) {
@@ -398,6 +400,7 @@ Stats stats() {
   s.bufferedBytes = ring.available();
   s.bufferSize = kRingBytes;
   s.fills = fills;
+  s.stalls = stalls;
   return s;
 }
 

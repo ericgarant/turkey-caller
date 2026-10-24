@@ -77,6 +77,8 @@ bool started = false;               // A2DP stack started
 uint32_t startedMs = 0;
 volatile bool discovering = false;  // an inquiry is running
 volatile bool searchRequested = false;
+volatile bool restartAudio = false;  // ask the speaker to resume the stream (set from callbacks)
+uint32_t seenStalls = 0;
 
 void remember(const char *name, esp_bd_addr_t a, int rssi) {
   char addr[18];
@@ -116,6 +118,8 @@ void onState(esp_a2d_connection_state_t state, void *) {
 }
 
 void onAudio(esp_a2d_audio_state_t state, void *) {
+  // Some speakers suspend the stream while staying connected; taps would then play nothing.
+  if (state == ESP_A2D_AUDIO_STATE_SUSPEND && a2dp.is_connected()) restartAudio = true;
   Serial.printf("speaker audio %s\n", state == ESP_A2D_AUDIO_STATE_STARTED ? "started"
                                         : state == ESP_A2D_AUDIO_STATE_SUSPEND ? "suspended" : "stopped");
 }
@@ -164,6 +168,18 @@ void begin() {
 void requestSearch() { searchRequested = true; }
 
 void loop() {
+  // A clip stalled (the speaker stopped pulling audio) or the speaker suspended the stream:
+  // ask it to start again. If that doesn't help, the next stall asks again.
+  uint32_t st = player::stats().stalls;
+  if (st != seenStalls) {
+    seenStalls = st;
+    restartAudio = true;
+  }
+  if (restartAudio && a2dp.is_connected()) {
+    restartAudio = false;
+    esp_err_t err = esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_START);
+    Serial.printf("asked the speaker to restart the audio stream: %s\n", esp_err_to_name(err));
+  }
   if (!searchRequested) return;
   searchRequested = false;
   if (!started) {

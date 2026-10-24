@@ -14,6 +14,7 @@ struct Stats {
   uint32_t bufferedBytes; // PCM bytes waiting in the ring buffer
   uint32_t bufferSize;
   uint32_t fills;         // A2DP data callbacks so far (should rise ~350/s while connected)
+  uint32_t stalls;        // clips dropped because the speaker stopped taking audio
 };
 
 void begin();                        // start the decode task (after LittleFS is mounted)

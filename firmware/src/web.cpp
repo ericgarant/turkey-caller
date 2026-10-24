@@ -22,6 +22,7 @@ AsyncWebServer server(80);
 DNSServer dns;
 
 volatile bool speakerPending = false;
+size_t fsFree = 0;  // computed once: usedBytes() walks the filesystem under the lock the player reads with
 char pendingSpeaker[33] = "";
 
 // Escapes a string for a JSON value (speaker names are user-controlled).
@@ -82,7 +83,9 @@ void handleStatus(AsyncWebServerRequest *req) {
   j += ",\"heap\":" + String(ESP.getFreeHeap());
   j += ",\"minHeap\":" + String(ESP.getMinFreeHeap());
   j += ",\"maxBlock\":" + String(ESP.getMaxAllocHeap());
-  j += ",\"fsFree\":" + String(LittleFS.totalBytes() - LittleFS.usedBytes());
+  j += ",\"fsFree\":" + String(fsFree);
+  j += ",\"fills\":" + String(p.fills);
+  j += ",\"stalls\":" + String(p.stalls);
   j += ",\"clients\":" + String(WiFi.softAPgetStationNum());
   j += ",\"uptime\":" + String(millis() / 1000);
   j += "}";
@@ -153,6 +156,7 @@ void handleConnect(AsyncWebServerRequest *req) {
 }  // namespace
 
 void begin() {
+  fsFree = LittleFS.totalBytes() - LittleFS.usedBytes();  // Phase 2: recompute after upload/delete
   WiFi.mode(WIFI_AP);
   bool apOk = WiFi.softAP(kApName, kApPassword, kApChannel, 0, kMaxClients);
   IPAddress ip = WiFi.softAPIP();

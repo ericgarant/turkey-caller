@@ -10,7 +10,7 @@ set -euo pipefail
 FORMAT="${FORMAT:-adpcm}"
 MAXSEC="${MAXSEC:-10}"
 # Whine: not in the SC DNR set, taken from a Xeno-canto field recording (CC licence, see SOURCES.md).
-# Listen to data/whine.mp3; if it's wrong, pick another recording or start time:
+# Listen to data/whine.wav; if it's wrong, pick another recording or start time:
 #   WHINE_XC=433074 WHINE_START=12 ./fetch_turkey_audio.sh
 WHINE_XC="${WHINE_XC:-508128}"
 WHINE_START="${WHINE_START:-0}"
