@@ -31,7 +31,7 @@ AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 DNSServer dns;
 
-char etag[12] = "";
+char etag[12] = "";                 // hash of the built-in page, sent as ETag so phones revalidate after a reflash
 volatile bool pushNow = false;       // something changed: push status on the next loop()
 volatile bool repeatOn = false;      // the Repeat switch, shared by every page (off after a restart)
 volatile int inFlight = 0;           // HTTP requests being served (AsyncTCP task; reset by loop())

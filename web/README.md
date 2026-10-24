@@ -21,8 +21,8 @@ python3 build.py            # writes firmware/src/web_page.h, then flash with pi
 ## What the page does
 
 - **Calls:** one button per sound, grouped Soft calls / Louder calls / Use with care (gobble and putt). Tap to play, tap the playing call again to stop. "Repeat" loops the call. Stop and volume (slider plus − / + steps for gloved hands) stay pinned at the bottom.
-- **Speaker:** status, search (about 10 s, stops playback), Use, Forget (tap twice). Speakers without a name have no Use button until the firmware connects by address.
-- **Settings:** sound list with storage meter, upload (asks before replacing a sound with the same name) and delete (refused while playing), Wi-Fi name and password, device name, and device health.
+- **Speaker:** status, search (about 10 s, stops playback), Use, Forget (tap twice). A speaker without a name is usable by its address.
+- **Settings:** sound list with storage meter, Wi-Fi name and password, device name, and device health. Upload and delete are deferred (F03): the controls are hidden by `EDIT_SOUNDS = false` and the firmware answers 501. When enabled, upload asks before replacing a sound with the same name, and delete is refused while playing.
 - **Dawn mode** (moon button): dim, red-only colors to keep night vision. Remembered on the phone. Otherwise the page follows the phone's light or dark setting.
 
 ## API contract with the firmware

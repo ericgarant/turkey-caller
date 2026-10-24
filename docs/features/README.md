@@ -31,7 +31,7 @@ Specs for what comes after Phase 0 (the Wi-Fi test page and Bluetooth ADPCM play
 
 Eric decided on 24 Oct 2026 to skip uploading his own recordings for now. The specs stay as written so the work can resume later, but nobody builds them until he asks.
 
-- **F03 Phone upload.** The firmware keeps answering `POST /api/sounds` and `POST /api/sounds/delete` with `501`, and the "Add a sound" controls in Settings should be hidden (small change, in the next web or firmware PR that touches the page) so nobody hits the 501.
+- **F03 Phone upload.** The firmware keeps answering `POST /api/sounds` and `POST /api/sounds/delete` with `501`, and the page hides the "Add a sound" field and Delete buttons (`EDIT_SOUNDS = false` in `web/index.html`, since #11). Set it to `true` when F03 comes back.
 - **F09 More room for sounds.** It only existed to make room for uploads. The current layout (2.5 MB app, 1.375 MB LittleFS) holds the 12 built-in calls, so it stays. Trimming the built-ins is still welcome but no longer required.
 
 If F03 comes back, do F09 first (storage decision), then F03.
