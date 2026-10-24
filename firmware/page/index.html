@@ -119,6 +119,7 @@ async function loadDevices(st) {
   }
 }
 
+const kb = n => (n / 1024).toFixed(1) + ' KB';
 async function refresh() {
   try {
     const st = await (await fetch('/api/status')).json();
@@ -138,6 +139,7 @@ async function refresh() {
     $('stats').innerHTML = rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('');
     loadDevices(st);
   } catch (e) {
+    console.error(e);
     $('bt').textContent = Date.now() - scanAt < 40000 ? 'searching (page slow while searching)' : 'ESP32 not reachable';
   }
 }

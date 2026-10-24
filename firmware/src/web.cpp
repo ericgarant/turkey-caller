@@ -147,6 +147,7 @@ void begin() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
     AsyncWebServerResponse *res = req->beginResponse(200, "text/html", kPageGz, sizeof(kPageGz));
     res->addHeader("Content-Encoding", "gzip");
+    res->addHeader("Cache-Control", "no-store");  // phones must not keep an old page after a flash
     req->send(res);
   });
   server.on("/api/status", HTTP_GET, handleStatus);
