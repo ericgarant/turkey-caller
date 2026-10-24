@@ -89,11 +89,16 @@ async function loadDevices(st) {
     row.className = 'row';
     const label = document.createElement('span');
     label.textContent = (d.name || d.addr) + ' (' + d.rssi + ' dBm)';
-    const b = document.createElement('button');
-    b.className = 'small';
-    b.textContent = 'Use';
-    b.onclick = async () => { await post('/api/bt/connect', {name: d.name}); say('Saved, the ESP32 is restarting…'); };
-    row.append(label, b);
+    row.append(label);
+    if (d.name) {  // the ESP32 finds speakers by name, so a nameless one can't be picked
+      const b = document.createElement('button');
+      b.className = 'small';
+      b.textContent = 'Use';
+      b.onclick = async () => {
+        try { await post('/api/bt/connect', {name: d.name}); say('Saved, the ESP32 is restarting…'); } catch (e) { say(e.message); }
+      };
+      row.append(b);
+    }
     box.appendChild(row);
   }
 }

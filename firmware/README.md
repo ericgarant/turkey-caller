@@ -11,8 +11,8 @@ PlatformIO project for the Freenove ESP32-WROOM-32E (4 MB flash, no PSRAM).
 | `src/bt.*` | A2DP source: finds the saved speaker by name, remembers its address, reconnects |
 | `src/web.*` | softAP `TurkeyCaller`, captive DNS, test page, JSON API |
 | `page/index.html` | The test page. Gzipped into `src/page.h` at build time by `scripts/embed_page.py` |
-| `scripts/check_size.py` | Fails the build if the app binary is over 1.8 MB |
-| `partitions.csv` | 2 MB app, 1.875 MB LittleFS (`data/`, partition labeled `spiffs` so defaults work), 64 KB coredump. No OTA |
+| `scripts/check_size.py` | Fails the build if the app binary is over 2.25 MB (90% of the app partition) |
+| `partitions.csv` | 2.5 MB app, 1.375 MB LittleFS (`data/`, partition labeled `spiffs` so defaults work), 64 KB coredump. No OTA |
 
 ## Flash it (Mac)
 
@@ -30,7 +30,7 @@ The board is plugged into the Mac by USB.
    pio run -t upload
    pio run -t uploadfs
    ```
-   The first build downloads the toolchain and takes a few minutes. The build prints `App binary: … of the 1.8 MB budget`.
+   The first build downloads the toolchain and takes a few minutes. The build prints `App binary: … of the 2.25 MB budget`.
 4. Watch the serial log: `pio device monitor` (Ctrl+C to quit). Every 5 s it prints Bluetooth state, plays, underruns and free heap.
 
 If upload can't find the board, list ports with `pio device list` and pass one, for example `pio run -t upload --upload-port /dev/cu.usbserial-110`. The Freenove board uses a CH340 USB chip; recent macOS has the driver built in. If it says "Failed to connect", hold the BOOT button while the upload starts.

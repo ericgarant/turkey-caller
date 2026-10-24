@@ -78,11 +78,16 @@ File file;
 
 portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
 char current[32] = "";
-volatile bool aborting = false;   // closing the current clip: drop decoder output
+// Ownership: the decode task is the only writer of `playing`, `current`, `decodeDone` and `gen`.
+// The A2DP callback (other core) only reads them, and reports back through `drainedGen`.
+volatile bool aborting = false;    // closing the current clip: drop decoder output
 volatile bool playing = false;     // a clip is being decoded or still draining from the ring
 volatile bool decodeDone = true;   // the decoder has reached the end of the file
-volatile bool primed = false;      // the ring has filled enough to start this clip
+volatile uint32_t gen = 0;         // bumped for every clip started
+volatile uint32_t drainedGen = 0;  // set by the callback: clip `gen` has fully played out
 volatile uint8_t volume = 70;
+volatile bool volumeDirty = false; // saved to NVS later, never during playback
+uint32_t volumeChangedMs = 0;
 volatile int32_t gainQ15 = 0;      // volume as a Q15 multiplier
 volatile uint32_t plays = 0;
 volatile uint32_t underruns = 0;
@@ -135,7 +140,6 @@ void closeCurrent() {
   }
   aborting = false;
   decodeDone = true;
-  primed = false;
   ring.reset();
   portENTER_CRITICAL(&lock);
   current[0] = 0;
@@ -154,7 +158,7 @@ void startClip(const char *id) {
   portENTER_CRITICAL(&lock);
   strlcpy(current, id, sizeof(current));
   portEXIT_CRITICAL(&lock);
-  primed = false;
+  gen = gen + 1;  // before `playing`, so the callback never pairs the new clip with an old gen
   decodeDone = false;
   playing = true;
   plays = plays + 1;
@@ -165,15 +169,24 @@ void task(void *) {
   static uint8_t buf[kReadChunk];
   Command cmd;
   for (;;) {
-    // Idle: wait for a command. Playing: only peek, so decoding keeps going.
-    bool got = file ? xQueueReceive(commands, &cmd, 0) == pdTRUE
-                    : xQueueReceive(commands, &cmd, portMAX_DELAY) == pdTRUE;
+    // Decoding: poll so decoding keeps going. Draining: wake every 10 ms to notice the end.
+    // Idle: sleep until a command arrives.
+    TickType_t wait = file ? 0 : playing ? pdMS_TO_TICKS(10) : portMAX_DELAY;
+    bool got = xQueueReceive(commands, &cmd, wait) == pdTRUE;
     if (got) {
       closeCurrent();
       if (!cmd.stop) startClip(cmd.id);
       continue;
     }
-    if (!file) continue;
+    if (!file) {
+      if (playing && decodeDone && drainedGen == gen) {
+        playing = false;  // the clip has fully played out
+        portENTER_CRITICAL(&lock);
+        current[0] = 0;
+        portEXIT_CRITICAL(&lock);
+      }
+      continue;
+    }
     size_t n = file.read(buf, sizeof(buf));
     if (n > 0) {
       mp3.write(buf, n);
@@ -219,11 +232,21 @@ void stop() {
 void setVolume(uint8_t level) {
   if (level > 100) level = 100;
   volume = level;
-  updateGain();
-  Preferences prefs;
-  prefs.begin("player", false);
-  prefs.putUChar("volume", level);
-  prefs.end();
+  updateGain();  // takes effect right away
+  volumeChangedMs = millis();
+  volumeDirty = true;
+}
+
+void loop() {
+  // Flash writes stall flash reads on both cores, so save only once the slider has settled
+  // and nothing is playing (see docs/architecture.md).
+  if (volumeDirty && !playing && millis() - volumeChangedMs > 2000) {
+    volumeDirty = false;
+    Preferences prefs;
+    prefs.begin("player", false);
+    prefs.putUChar("volume", volume);
+    prefs.end();
+  }
 }
 
 Stats stats() {
@@ -242,13 +265,16 @@ Stats stats() {
 
 int32_t fillFrames(Frame *frames, int32_t count) {
   static int16_t mono[512];
+  static uint32_t primedGen = 0;  // callback-only: the clip that has passed its pre-buffer
   int32_t done = 0;
+  uint32_t g = gen;  // read once: the clip this call is serving
 
-  if (playing && !primed) {
-    if (ring.available() >= kPrimeBytes || decodeDone) primed = true;
+  bool active = playing && drainedGen != g;
+  if (active && primedGen != g) {
+    if (ring.available() >= kPrimeBytes || decodeDone) primedGen = g;
   }
 
-  if (playing && primed) {
+  if (active && primedGen == g) {
     int32_t gain = gainQ15;
     while (done < count) {
       size_t want = min<size_t>(count - done, sizeof(mono) / sizeof(mono[0]));
@@ -261,12 +287,9 @@ int32_t fillFrames(Frame *frames, int32_t count) {
       }
       done += got;
     }
-    if (done < count) {
+    if (done < count && g == gen) {
       if (decodeDone) {
-        playing = false;  // clip finished and drained
-        portENTER_CRITICAL(&lock);
-        current[0] = 0;
-        portEXIT_CRITICAL(&lock);
+        drainedGen = g;  // the decode task clears `playing`
       } else {
         underruns = underruns + 1;  // decoder fell behind: an audible dropout
       }

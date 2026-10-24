@@ -10,7 +10,7 @@ The illustrated version of this document lives at https://claude.ai/artifact/87p
 | ESP32 ↔ speaker | Bluetooth Classic A2DP, ESP32 as source (ESP32-A2DP) |
 | Web app | Plain HTML/CSS/JS served gzipped from LittleFS, no internet needed |
 | Audio | Mono MP3, 44.1 kHz, 64 kbps (~8 KB/s, ~3.5 min fits). Helix decoder from arduino-audio-tools |
-| Storage | `partitions.csv`: 2 MB factory app, 1.875 MB LittleFS, no OTA. The data partition is named and typed `spiffs` (the Arduino and PlatformIO default) but formatted as LittleFS (`board_build.filesystem = littlefs`), so plain `LittleFS.begin()` and `pio run -t uploadfs` work |
+| Storage | `partitions.csv`: 2.5 MB factory app, 1.375 MB LittleFS, no OTA. The build fails if the app binary passes 2.25 MB (90% of its partition). The data partition is named and typed `spiffs` (the Arduino and PlatformIO default) but formatted as LittleFS (`board_build.filesystem = littlefs`), so plain `LittleFS.begin()` and `pio run -t uploadfs` work |
 | Toolchain | PlatformIO + pioarduino (Arduino core 3.x) |
 
 ## Radio sharing
@@ -50,7 +50,7 @@ One 2.4 GHz radio is time-shared between Wi-Fi and BT Classic.
 
 ## Phases
 
-0. **Prove the risky part** (ESP32 coder, QA): softAP + page + A2DP playing an MP3. Done when there are no dropouts during 50 rapid taps, free heap stays above 40 KB, and the app binary with all libraries linked is under 1.8 MB (if not, move space from LittleFS to the app partition; the clips need only ~0.5 MB).
+0. **Prove the risky part** (ESP32 coder, QA): softAP + page + A2DP playing an MP3. Done when there are no dropouts during 50 rapid taps, free heap stays above 40 KB, and the app binary with all libraries linked fits its budget. Phase 0 measured 1.75 MB against the original 2 MB app partition, so the app partition was grown to 2.5 MB (LittleFS 1.375 MB; the clips need ~0.6 MB).
 1. **Specs and sounds** (feature writer, architect): user stories, final catalog, audio manifest.
 2. **Firmware core** (ESP32 coder): modules and API, native unit tests.
 3. **Web app** (web designer/coder): build against the mock, then the board.

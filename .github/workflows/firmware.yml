@@ -2,6 +2,7 @@ name: Firmware build
 
 on:
   push:
+    branches: [main]
     paths: ["firmware/**", ".github/workflows/firmware.yml"]
   pull_request:
     paths: ["firmware/**", ".github/workflows/firmware.yml"]
@@ -19,7 +20,7 @@ jobs:
           path: ~/.platformio
           key: pio-${{ hashFiles('firmware/platformio.ini') }}
       - run: pip install platformio
-      # Builds the app and fails if it is over the 1.8 MB budget (scripts/check_size.py)
+      # Builds the app and fails if it is over the 2.25 MB budget (scripts/check_size.py)
       - run: pio run -d firmware
       # The LittleFS image builds even without the (non-redistributable) sounds
       - run: pio run -d firmware -t buildfs

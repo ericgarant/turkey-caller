@@ -23,6 +23,7 @@ void setup() {
 
 void loop() {
   web::loop();
+  player::loop();
 
   static uint32_t last = 0;
   if (millis() - last >= 5000) {

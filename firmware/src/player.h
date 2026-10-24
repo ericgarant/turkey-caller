@@ -18,7 +18,8 @@ struct Stats {
 void begin();                        // start the decode task (after LittleFS is mounted)
 bool play(const char *id);           // queue a clip by name ("cluck"); a new play replaces the current one
 void stop();
-void setVolume(uint8_t level);       // 0-100, saved to NVS
+void setVolume(uint8_t level);       // 0-100, applies now, saved to NVS later by loop()
+void loop();                         // call from loop(): deferred NVS save
 Stats stats();
 
 // A2DP source data callback: fills `count` stereo frames, always returns count.
