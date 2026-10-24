@@ -1,5 +1,7 @@
 # F03 Phone upload with conversion in the page
 
+> **Status: deferred** (24 Oct 2026). Eric skipped uploading his own recordings for now. Not in the active build order; see [README](README.md#deferred).
+
 **Story:** As a hunter, I pick a call recording from my phone (usually MP3 or M4A) and it becomes a button, without a computer.
 
 ## Behavior

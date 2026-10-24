@@ -28,7 +28,7 @@ One 2.4 GHz radio is time-shared between Wi-Fi and BT Classic.
 | Module | Job |
 |---|---|
 | `net` | softAP, captive DNS, optional STA mode for development |
-| `web` | Static UI, REST API, WebSocket status, sound upload (ESPAsyncWebServer). The device plays only mono ADPCM/PCM WAV, so the page converts other formats in the browser before upload (decodeAudioData + a small JS ADPCM encoder), or the upload is refused with a clear error |
+| `web` | Static UI, REST API, WebSocket status, sound upload (ESPAsyncWebServer). Upload is deferred (F03): its routes answer 501 for now. When it returns: the device plays only mono ADPCM/PCM WAV, so the page converts other formats in the browser before upload (decodeAudioData + a small JS ADPCM encoder), or the upload is refused with a clear error |
 | `bt` | Scan, connect, remember, auto-reconnect (BluetoothA2DPSource) |
 | `player` | Decode task, ring buffer, volume gain, mono→stereo, stop/loop/queue |
 | `library` | List/add/delete sounds; names and order from `sounds/index.json` (hand-written, kept in git) |
