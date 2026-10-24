@@ -45,7 +45,7 @@ One 2.4 GHz radio is time-shared between Wi-Fi and BT Classic.
 | `POST /api/bt/scan`, `GET /api/bt/devices` | Find speakers |
 | `POST /api/bt/connect {addr}`, `POST /api/bt/forget` | Pair / forget |
 | `GET/POST /api/config` | AP name, password, device name |
-| `POST /api/sounds`, `DELETE /api/sounds/:id` | Upload / remove. Refused with 409 while audio is playing (flash writes stall the decoder's flash reads) |
+| `POST /api/sounds` (multipart `file`), `POST /api/sounds/delete {id}` | Upload / remove (no path params: ESPAsyncWebServer regex routes cost ~150 KB of flash). Refused with 409 while audio is playing (flash writes stall the decoder's flash reads) |
 | `WS /ws` | Status pushes; also accepts play, stop, volume |
 
 ## Phases
