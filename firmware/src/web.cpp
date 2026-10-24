@@ -159,11 +159,13 @@ void begin() {
   server.on("/api/volume", HTTP_POST, handleVolume);
   server.on("/api/bt/devices", HTTP_GET, handleDevices);
   server.on("/api/bt/scan", HTTP_POST, [](AsyncWebServerRequest *req) {
+    Serial.println("search requested");
     bt::requestSearch();
     sendOk(req);
   });
   server.on("/api/bt/connect", HTTP_POST, handleConnect);
   server.on("/api/bt/forget", HTTP_POST, [](AsyncWebServerRequest *req) {
+    Serial.println("forget requested");
     pendingSpeaker[0] = 0;
     speakerPending = true;
     sendOk(req);

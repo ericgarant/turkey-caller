@@ -83,8 +83,11 @@ let scanAt = 0;  // when "Search" was tapped: the page is slow for ~25 s while t
 
 async function loadDevices(st) {
   const box = $('devs');
-  if (st.bt === 'connected') { box.innerHTML = ''; return; }
+  if (st.bt === 'connected') { box.innerHTML = ''; box.dataset.key = ''; return; }
   const list = await (await fetch('/api/bt/devices')).json();
+  const key = st.bt + JSON.stringify(list);
+  if (key === box.dataset.key) return;  // unchanged: don't redraw under the user's finger
+  box.dataset.key = key;
   box.innerHTML = '';
   if (st.bt === 'searching') {
     box.innerHTML = '<div class="row" style="color:var(--dim)">Searching (about 25 s, the page may be slow)…</div>';
@@ -122,6 +125,7 @@ async function refresh() {
     $('bt').textContent = st.bt;
     $('dot').className = 'dot' + (st.bt === 'connected' ? ' on' : '');
     $('spk').textContent = st.speaker;
+    $('forget').hidden = !st.speaker;  // nothing to forget
     if (!volBusy && document.activeElement !== $('vol')) { $('vol').value = st.volume; $('volv').textContent = st.volume; }
     for (const b of $('sounds').children) b.classList.toggle('playing', st.playing && b.dataset.id === st.current);
     const rows = [
@@ -139,7 +143,9 @@ async function refresh() {
 }
 
 $('stop').onclick = () => post('/api/stop').catch(e => say(e.message));
-$('forget').onclick = async () => { await post('/api/bt/forget'); say('Forgotten, the ESP32 is restarting…'); };
+$('forget').onclick = async () => {
+  if (!confirm('Forget the saved speaker? The ESP32 will restart.')) return;
+  await post('/api/bt/forget'); say('Forgotten, the ESP32 is restarting…'); };
 $('vol').oninput = () => {
   $('volv').textContent = $('vol').value;
   clearTimeout(volTimer);

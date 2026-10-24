@@ -190,7 +190,7 @@ void chooseSpeaker(const char *name) {
   prefs.putString("speaker", name);
   prefs.end();
   a2dp.clean_last_connection();  // so the next boot searches for the new name
-  log_i("speaker set to \"%s\", rebooting", name);
+  Serial.printf("speaker set to \"%s\", rebooting\n", name);
   delay(300);
   ESP.restart();
 }
