@@ -9,7 +9,7 @@ The illustrated version of this document lives at https://claude.ai/artifact/87p
 | Phone ↔ ESP32 | Wi-Fi softAP + HTTP and WebSocket. Browsers cannot speak ESP-NOW. |
 | ESP32 ↔ speaker | Bluetooth Classic A2DP, ESP32 as source (ESP32-A2DP) |
 | Web app | Plain HTML/CSS/JS served gzipped from LittleFS, no internet needed |
-| Audio | Mono MP3, 44.1 kHz, 64 kbps (~8 KB/s, ~3.5 min fits). Helix decoder from arduino-audio-tools |
+| Audio | Mono MP3, 44.1 kHz, 64 kbps (~8 KB/s, ~2.5 min fits). Helix decoder from arduino-audio-tools |
 | Storage | `partitions.csv`: 2.5 MB factory app, 1.375 MB LittleFS, no OTA. The build fails if the app binary passes 2.25 MB (90% of its partition). The data partition is named and typed `spiffs` (the Arduino and PlatformIO default) but formatted as LittleFS (`board_build.filesystem = littlefs`), so plain `LittleFS.begin()` and `pio run -t uploadfs` work |
 | Toolchain | PlatformIO + pioarduino (Arduino core 3.x) |
 
