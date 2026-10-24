@@ -31,9 +31,8 @@ AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 DNSServer dns;
 
-volatile bool speakerPending = false;
-char pendingSpeaker[33] = "";
 char etag[12] = "";
+volatile bool pushNow = false;       // something changed: push status on the next loop()
 volatile bool repeatOn = false;      // the Repeat switch, shared by every page (off after a restart)
 volatile int inFlight = 0;           // HTTP requests being served (AsyncTCP task; reset by loop())
 volatile uint32_t lastRequestMs = 0;  // last time a request was admitted or finished (watchdog for a stuck inFlight)
@@ -150,15 +149,25 @@ bool truthy(const String &v) { return v == "1" || v == "true"; }
 void handlePlay(AsyncWebServerRequest *req) {
   String id = param(req, "id");
   if (!library::has(id.c_str())) return sendError(req, 400, "unknown sound");
-  if (!bt::connected()) {
-    Serial.println("tap refused: speaker not connected");
-    return sendError(req, 409, "No speaker connected");
-  }
   String loopParam = param(req, "loop");
   bool loop = loopParam.isEmpty() ? (bool)repeatOn : truthy(loopParam);
+  // Never waits (F07): 200 playing now, 202 waking the speaker first, 409 no speaker.
+  switch (bt::requestPlay(id.c_str(), loop)) {
+    case bt::kNoSpeaker:
+      Serial.println("tap refused: no speaker saved");
+      return sendError(req, 409, "No speaker connected");
+    case bt::kSearching:
+      Serial.println("tap refused: searching for speakers");
+      return sendError(req, 409, "Searching for speakers, try again after the search");
+    case bt::kWaking:
+      repeatOn = loop;
+      pushNow = true;
+      Serial.printf("tap %s%s: waking the speaker\n", id.c_str(), loop ? " (repeat)" : "");
+      return req->send(202, "application/json", "{\"ok\":true,\"waking\":true}");
+    case bt::kPlaying:
+      break;
+  }
   repeatOn = loop;  // a play with loop= also sets the shared switch
-  bt::notePlay();
-  if (!player::play(id.c_str(), loop)) return sendError(req, 400, "unknown sound");
   Serial.printf("tap %s%s\n", id.c_str(), loop ? " (repeat)" : "");
   sendOk(req);
 }
@@ -194,14 +203,15 @@ void handleDevices(AsyncWebServerRequest *req) {
 }
 
 void handleConnect(AsyncWebServerRequest *req) {
-  // `addr` is accepted for the page's sake; connecting by address comes with F06. Until then
-  // the board saves the name, restarts and finds the speaker by name.
-  String name = param(req, "name");
-  if (name.isEmpty()) return sendError(req, 400, "missing name (use /api/bt/forget to clear)");
-  if (name.length() >= sizeof(pendingSpeaker)) return sendError(req, 400, "name too long");
-  strlcpy(pendingSpeaker, name.c_str(), sizeof(pendingSpeaker));
-  Serial.printf("connect requested: \"%s\" %s\n", pendingSpeaker, param(req, "addr").c_str());
-  speakerPending = true;  // restart happens in loop(), after this reply is sent
+  // F06: saves the speaker and connects by address without a restart. A speaker with no name
+  // is selectable by address; one with no address (rare) is found by name after a restart.
+  String name = param(req, "name"), addr = param(req, "addr");
+  if (name.isEmpty() && addr.isEmpty()) return sendError(req, 400, "missing addr (use /api/bt/forget to clear)");
+  if (name.length() > 32) return sendError(req, 400, "name too long");
+  if (name.isEmpty()) name = addr;  // shown in the header until the speaker says its name
+  Serial.printf("connect requested: \"%s\" %s\n", name.c_str(), addr.c_str());
+  bt::use(name.c_str(), addr.c_str());  // carried out by bt::loop(), after this reply is sent
+  pushNow = true;
   sendOk(req);
 }
 
@@ -209,7 +219,6 @@ void notYet(AsyncWebServerRequest *req) { sendError(req, 501, "not available in 
 
 // ---- WebSocket ----
 
-volatile bool pushNow = false;  // something changed: push status on the next loop()
 
 // Commands from the page: {"cmd":"volume","level":N}, also {"cmd":"stop"}.
 void setRepeat(bool on) {
@@ -230,6 +239,7 @@ void onCommand(const char *msg) {
     }
   } else if (strstr(msg, "\"cmd\":\"stop\"")) {
     logStop();
+    bt::cancelWake();
     player::stop();
     pushNow = true;
   } else if (strstr(msg, "\"cmd\":\"repeat\"")) {
@@ -265,12 +275,14 @@ void onWsEvent(AsyncWebSocket *, AsyncWebSocketClient *client, AwsEventType type
 struct Shown {
   char bt[16];
   char current[32];
+  char stream[12];
+  uint8_t errorLen;
   bool playing, loop, repeat;
   uint8_t volume;
   int clients;
   size_t speakerLen;
   bool operator!=(const Shown &o) const {
-    return strcmp(bt, o.bt) || strcmp(current, o.current) || playing != o.playing || loop != o.loop || repeat != o.repeat ||
+    return strcmp(bt, o.bt) || strcmp(current, o.current) || strcmp(stream, o.stream) || errorLen != o.errorLen || playing != o.playing || loop != o.loop || repeat != o.repeat ||
            volume != o.volume || clients != o.clients || speakerLen != o.speakerLen;
   }
 };
@@ -280,6 +292,8 @@ Shown shownNow() {
   Shown s{};
   strlcpy(s.bt, btState(), sizeof(s.bt));
   strlcpy(s.current, p.current, sizeof(s.current));
+  strlcpy(s.stream, bt::stream(), sizeof(s.stream));
+  s.errorLen = (uint8_t)bt::error().length();
   s.playing = p.playing;
   s.loop = p.loop;
   s.volume = p.volume;
@@ -405,6 +419,7 @@ void begin() {
   server.on("/api/play", HTTP_POST, handlePlay);
   server.on("/api/stop", HTTP_POST, [](AsyncWebServerRequest *req) {
     logStop();
+    bt::cancelWake();
     player::stop();
     sendOk(req);
   });
@@ -425,9 +440,8 @@ void begin() {
   server.on("/api/bt/connect", HTTP_POST, handleConnect);
   server.on("/api/bt/forget", HTTP_POST, [](AsyncWebServerRequest *req) {
     Serial.println("forget requested");
-    player::stop();
-    pendingSpeaker[0] = 0;
-    speakerPending = true;
+    bt::forget();  // disconnects and clears it in bt::loop(), no restart (F06)
+    pushNow = true;
     sendOk(req);
   });
   // Captive portal: phones probe random URLs; send them all to the page.
@@ -456,10 +470,6 @@ void loop() {
     inFlight = 0;
   }
   pushLoop();
-  if (speakerPending) {
-    delay(200);  // let the HTTP reply go out
-    bt::chooseSpeaker(pendingSpeaker);
-  }
 }
 
 }  // namespace web

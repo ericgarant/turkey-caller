@@ -251,6 +251,7 @@ function onStatus(s){
   if(!s||typeof s!=="object")return;
   if(s.bt&&!BT_TEXT[s.bt])s.bt=/connect/i.test(s.bt)&&!/not|dis/i.test(s.bt)?"connected":/search|scan/i.test(s.bt)?"searching":"idle";
   if(s.repeat!=null)$("loopSw").checked=!!s.repeat;  // Repeat is kept on the board and shared by every phone
+  if(s.error&&s.error!==st.error)toast(s.error);  // e.g. "Speaker did not answer" after a wake
   st=Object.assign(st,s);stAt=Date.now();lastOk=Date.now();
   if(restarting&&Date.now()-restarting>4000){restarting=0;loadSounds();loadConfig()}
   $("offline").hidden=true;
@@ -311,11 +312,15 @@ function renderCalls(){
   }
 }
 async function tapCall(s){
-  if(st.bt!=="connected"){toast("Connect a speaker first");return}
+  if(!st.speaker){toast("Connect a speaker first");return}
   if(st.playing&&st.current===s.id)return stop();   // tap a playing call to stop it
   const loop=$("loopSw").checked;
   Object.assign(st,{playing:true,current:s.id,pos_ms:0,len_ms:s.ms,loop});stAt=Date.now();paintPlaying();
-  try{await api("/api/play",{id:s.id,loop:loop?1:0})}catch(e){st.playing=false;paint();toast(why(e))}
+  try{
+    const r=await api("/api/play",{id:s.id,loop:loop?1:0});
+    // 202: the speaker was asleep or out of reach; the board wakes it and plays (or reports why not)
+    if(r&&r.waking){Object.assign(st,{playing:false,stream:"waking"});paint();toast("Waking the speaker…")}
+  }catch(e){st.playing=false;paint();toast(why(e))}
 }
 async function stop(){
   st.playing=false;paint();
@@ -353,7 +358,7 @@ const sigBars=r=>{const n=r>-60?4:r>-70?3:r>-80?2:1;return `<span class="sig" ti
 function renderDevices(scanning){
   const ul=$("devList");
   if(scanning&&!devices.length){ul.innerHTML=`<li class="empty"><span class="spin"></span>Searching…</li>`;return}
-  ul.innerHTML=devices.map((d,i)=>`<li>${sigBars(d.rssi)}<div class="grow"><div class="nm">${esc(d.name||"Unnamed")}</div><div class="sub mono">${esc(d.addr||"")}</div></div>${d.name?`<button class="btn" type="button" data-i="${i}">Use</button>`:""}</li>`).join("")
+  ul.innerHTML=devices.map((d,i)=>`<li>${sigBars(d.rssi)}<div class="grow"><div class="nm">${esc(d.name||"Unnamed")}</div><div class="sub mono">${esc(d.addr||"")}</div></div>${d.name||d.addr?`<button class="btn" type="button" data-i="${i}">Use</button>`:""}</li>`).join("")
     +(scanning?`<li class="empty"><span class="spin"></span>Still searching…</li>`:"");
   ul.querySelectorAll("[data-i]").forEach(b=>b.onclick=()=>useSpeaker(devices[+b.dataset.i]));
 }
@@ -372,13 +377,13 @@ $("scanBtn").onclick=async()=>{
 };
 async function useSpeaker(d){
   try{await api("/api/bt/connect",{addr:d.addr||"",name:d.name});
-    st.bt="connecting";st.speaker=d.name;paint();toast("Connecting to "+(d.name||d.addr));lastOk=Date.now();restarting=Date.now()}
+    st.bt="connecting";st.speaker=d.name||d.addr;paint();toast("Connecting to "+(d.name||d.addr))}
   catch(e){toast(why(e))}
 }
 const forget=$("forgetBtn");
 forget.onclick=async()=>{
   if(!forget.dataset.armed){forget.dataset.armed=1;forget.textContent="Tap again to forget";setTimeout(()=>{delete forget.dataset.armed;forget.textContent="Forget speaker"},3000);return}
-  try{await api("/api/bt/forget",{});st.bt="idle";st.speaker="";paint();toast("Speaker forgotten");restarting=Date.now();lastOk=Date.now()}catch(e){toast(why(e))}
+  try{await api("/api/bt/forget",{});st.bt="idle";st.speaker="";paint();toast("Speaker forgotten")}catch(e){toast(why(e))}
 };
 
 // ---- Settings: sounds ----
@@ -439,13 +444,14 @@ $("cfgForm").onsubmit=async e=>{
 function paint(){
   const conn=st.bt==="connected",dot="dot "+(conn?"good":st.bt==="idle"?"bad":st.bt?"warn":"");
   $("spkDot").className=$("spkDot2").className=dot;
-  $("spkText").textContent=conn?(st.speaker||"Connected"):(BT_TEXT[st.bt]||"Loading…");
+  $("spkText").textContent=st.stream==="waking"?"Waking the speaker…":conn?(st.speaker||"Connected"):(BT_TEXT[st.bt]||"Loading…");
   $("spkName").textContent=st.speaker||"No speaker saved";
   $("spkState").textContent=conn?"Connected · reconnects by itself":st.bt==="connecting"?"Connecting…":st.speaker?"Not in range. Turn the speaker on.":"Search below and tap Use";
   forget.hidden=!st.speaker;
   $("noSpk").hidden=conn||!st.bt;
   $("noSpkText").innerHTML=st.speaker?`<b>${esc(st.speaker)} is not connected.</b> Turn it on; the caller finds it by itself.`:`<b>No speaker connected.</b> Pick one under Speaker.`;
-  document.querySelectorAll(".call").forEach(b=>b.disabled=!conn);
+  // With a speaker saved, a tap also wakes it or reconnects it (F07), so calls stay usable.
+  document.querySelectorAll(".call").forEach(b=>b.disabled=!st.speaker);
   if(st.volume!=null&&document.activeElement!==$("vol")&&Date.now()-volSentAt>1000){$("vol").value=st.volume;$("volTxt").textContent=st.volume}
   $("volDn").disabled=$("volUp").disabled=$("vol").disabled=st.volume==null;
   document.querySelectorAll("[data-del]").forEach(b=>b.disabled=!!st.playing);

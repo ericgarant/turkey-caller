@@ -39,6 +39,14 @@ try {
     await page.click('.call[data-id="cutting"]');
     await page.waitForFunction(() => !document.querySelector(".call.on"));
   });
+  await step("a tap on a sleeping speaker says it is waking it, then plays", async () => {
+    await page.evaluate(() => fetch("/api/mock/speaker", { method: "POST", body: new URLSearchParams({ mode: "asleep" }) }));
+    await page.click('.call[data-id="purr"]');
+    await page.waitForFunction(() => /Waking the speaker/.test(document.getElementById("toast").textContent));
+    await page.waitForSelector('.call.on[data-id="purr"]', { timeout: 6000 });
+    await page.click("#stopBtn");
+    await page.waitForFunction(() => !document.querySelector(".call.on"));
+  });
   await step("volume buttons change the board's volume", async () => {
     await page.click("#volUp");
     await page.waitForFunction(async () => (await (await fetch("/api/status")).json()).volume === 65);
@@ -57,7 +65,7 @@ try {
     await page.click('nav [data-go="speaker"]');
     await page.click("#scanBtn");
     await page.waitForFunction(() => document.querySelectorAll("#devList li .mono").length === 4, null, { timeout: 12000 });
-    assert.equal(await page.locator("#devList [data-i]").count(), 3, "nameless speaker has no Use button");
+    assert.equal(await page.locator("#devList [data-i]").count(), 4, "a nameless speaker is usable by address (F06)");
     await page.click('#devList [data-i="0"]');
     await page.waitForFunction(() => document.getElementById("spkText").textContent === "Level Box Slim", null, { timeout: 8000 });
   });

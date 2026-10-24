@@ -72,6 +72,7 @@ class Ring {
 struct Command {
   bool stop;
   bool loop;
+  uint32_t preRollMs;
   char id[32];
 };
 
@@ -99,6 +100,7 @@ volatile bool stalled = false;     // the speaker stopped taking audio mid-clip
 volatile uint32_t stalls = 0;
 volatile bool looping = false;     // the current clip repeats (set at start and by setLoop())
 volatile uint32_t lenMs = 0;       // length of the current clip
+volatile uint32_t preRollFrames = 0;  // silence before the current clip (set before `playing`)
 volatile uint32_t servedFrames = 0;  // callback-only writer: 44.1 kHz frames of the current clip sent
 // Clips are WAV files: IMA ADPCM (what tools/audio produces, 4 bits a sample, no decoder
 // memory) or plain 16-bit PCM, mono, any sample rate up to 44.1 kHz. The Helix MP3 decoder
@@ -259,7 +261,7 @@ void closeCurrent() {
   portEXIT_CRITICAL(&lock);
 }
 
-void startClip(const char *id, bool loop) {
+void startClip(const char *id, bool loop, uint32_t preRollMs) {
   char path[48];
   snprintf(path, sizeof(path), "/sounds/%s.wav", id);
   file = LittleFS.open(path, "r");
@@ -281,6 +283,7 @@ void startClip(const char *id, bool loop) {
   strlcpy(current, id, sizeof(current));
   portEXIT_CRITICAL(&lock);
   stalled = false;
+  preRollFrames = preRollMs * (kSampleRate / 1000);
   gen = gen + 1;  // before `playing`, so the callback never pairs the new clip with an old gen
   decodeDone = false;
   playing = true;
@@ -298,7 +301,7 @@ void task(void *) {
     bool got = xQueueReceive(commands, &cmd, wait) == pdTRUE;
     if (got) {
       closeCurrent();
-      if (!cmd.stop) startClip(cmd.id, cmd.loop);
+      if (!cmd.stop) startClip(cmd.id, cmd.loop, cmd.preRollMs);
       continue;
     }
     if (!file) {
@@ -341,11 +344,12 @@ void begin() {
   xTaskCreatePinnedToCore(task, "player", 4096, nullptr, 5, nullptr, 1);
 }
 
-bool play(const char *id, bool loop) {
+bool play(const char *id, bool loop, uint32_t preRollMs) {
   if (!id || !*id || strlen(id) >= sizeof(Command::id) || strchr(id, '/') || strchr(id, '.')) return false;
   Command cmd{};
   cmd.stop = false;
   cmd.loop = loop;
+  cmd.preRollMs = preRollMs;
   strlcpy(cmd.id, id, sizeof(cmd.id));
   xQueueOverwrite(commands, &cmd);
   return true;
@@ -412,6 +416,7 @@ int32_t fillFrames(Frame *frames, int32_t count) {
   static uint32_t servedGen = 0;  // callback-only: the clip whose samples were sent last
   static int32_t fadeIn = 0;      // samples of the current clip sent so far, up to kFadeSamples
   static int16_t last = 0;        // last sample sent, ramped to 0 when a clip ends early
+  static uint32_t preGen = 0, preLeft = 0;  // callback-only: pre-roll silence still to send
   int32_t done = 0;
   fills = fills + 1;
   uint32_t g = gen;  // read once: the clip this call is serving
@@ -426,6 +431,15 @@ int32_t fillFrames(Frame *frames, int32_t count) {
   if (gain < 0) gain = gainQ15;
   const int32_t target = gainQ15;
   if (active && primedGen == g) {
+    if (preGen != g) {
+      preGen = g;
+      preLeft = preRollFrames;
+    }
+    for (; preLeft > 0 && done < count; preLeft--, done++) {
+      frames[done].channel1 = 0;
+      frames[done].channel2 = 0;
+      last = 0;
+    }
     while (done < count) {
       size_t want = min<size_t>(count - done, sizeof(mono) / sizeof(mono[0]));
       size_t got = ring.read((uint8_t *)mono, want * sizeof(int16_t)) / sizeof(int16_t);
