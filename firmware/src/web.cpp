@@ -295,7 +295,7 @@ void pushLoop() {
   Shown s = shownNow();
   uint32_t every = s.playing ? kPushPlayingMs : kPushIdleMs;
   if (!pushNow && !(s != last) && now - lastPush < every) return;
-  if (ESP.getMaxAllocHeap() < 6144 || !ws.availableForWriteAll()) return;  // try again shortly
+  if (bt::busy() || ESP.getMaxAllocHeap() < 6144 || !ws.availableForWriteAll()) return;  // try again shortly
   pushNow = false;
   last = s;
   lastPush = now;
@@ -311,7 +311,8 @@ void makeEtag() {
 
 void handlePage(AsyncWebServerRequest *req) {
   if (lowMemory(req)) return;
-  Serial.printf("GET / heap=%u block=%u\n", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
+  Serial.printf("GET / heap=%u block=%u min=%u\n", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap(),
+                (unsigned)ESP.getMinFreeHeap());
   if (req->hasHeader("If-None-Match") && req->header("If-None-Match") == etag) {
     AsyncWebServerResponse *res = req->beginResponse(304);
     res->addHeader("ETag", etag);
@@ -333,7 +334,8 @@ void begin() {
   WiFi.onEvent([](arduino_event_id_t event, arduino_event_info_t info) {
     if (event == ARDUINO_EVENT_WIFI_AP_STACONNECTED) {
       const uint8_t *m = info.wifi_ap_staconnected.mac;
-      Serial.printf("phone joined %02x:%02x:%02x:%02x:%02x:%02x\n", m[0], m[1], m[2], m[3], m[4], m[5]);
+      Serial.printf("phone joined %02x:%02x:%02x:%02x:%02x:%02x min=%u\n", m[0], m[1], m[2], m[3], m[4], m[5],
+                    (unsigned)ESP.getMinFreeHeap());
     } else if (event == ARDUINO_EVENT_WIFI_AP_STADISCONNECTED) {
       const uint8_t *m = info.wifi_ap_stadisconnected.mac;
       Serial.printf("phone left %02x:%02x:%02x:%02x:%02x:%02x reason %u\n", m[0], m[1], m[2], m[3], m[4], m[5],
@@ -358,7 +360,11 @@ void begin() {
   server.addMiddleware([](AsyncWebServerRequest *req, ArMiddlewareNext next) {
     if (req->url() == "/ws") return next();
     lastRequestMs = millis();
-    if (inFlight >= kMaxRequests) {
+    // While the speaker connects and starts its stream (a few seconds, ~35 KB of heap), only
+    // play and stop are served; page loads and the rest get 503 and the page retries.
+    const String &u = req->url();
+    bool busy = bt::busy() && u != "/api/play" && u != "/api/stop";
+    if (busy || inFlight >= kMaxRequests) {
       Serial.printf("503 %s: busy\n", req->url().c_str());
       AsyncWebServerResponse *res = req->beginResponse(503, "application/json", "{\"ok\":false,\"error\":\"busy\"}");
       res->addHeader("Retry-After", "1");

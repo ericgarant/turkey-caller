@@ -234,8 +234,8 @@ async function api(path,params,method){
   let r;
   for(let i=0;;i++){  // 503 = the board is busy or low on memory: wait and retry
     r=await fetch(path,opt);
-    if(r.status!==503||i>=3)break;
-    await new Promise(ok=>setTimeout(ok,500+i*500));
+    if(r.status!==503||i>=6)break;  // up to ~9 s: covers the board's busy window while a speaker connects
+    await new Promise(ok=>setTimeout(ok,Math.min(500+i*500,2000)));
   }
   let j=null;try{j=await r.json()}catch(_){}
   if(!r.ok)throw new Error((j&&j.error)||("HTTP "+r.status));

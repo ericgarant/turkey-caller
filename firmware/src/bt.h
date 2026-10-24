@@ -12,6 +12,7 @@ struct Device {
 
 void begin();                  // start the BT stack (call before Wi-Fi)
 bool connected();
+bool busy();                   // the speaker is connecting or starting its stream: heap is tight for a few seconds
 const char *state();           // "idle" (not searching), "searching" (one ~25 s round per request), "connecting", "connected", "disconnecting"
 void requestSearch();          // start looking for speakers (from any task)
 void loop();                   // call from loop(): starts a requested search

@@ -82,6 +82,7 @@ volatile bool restartAudio = false;  // ask the speaker to resume the stream (se
 uint32_t seenStalls = 0;
 volatile bool audioStarted = false;  // the speaker is taking the audio stream
 volatile uint32_t connectedMs = 0;   // when the speaker last connected (0 = not connected)
+volatile uint32_t connectingMs = 0;  // when a connect attempt started (0 = none running)
 
 void remember(const char *name, esp_bd_addr_t a, int rssi) {
   char addr[18];
@@ -121,10 +122,14 @@ void setCoex(esp_coex_prefer_t p) {
 
 void onState(esp_a2d_connection_state_t state, void *) {
   Serial.printf("speaker %s\n", a2dp.to_str(state));
-  if (state == ESP_A2D_CONNECTION_STATE_CONNECTED) {
+  if (state == ESP_A2D_CONNECTION_STATE_CONNECTING) {
+    connectingMs = millis() | 1;
+  } else if (state == ESP_A2D_CONNECTION_STATE_CONNECTED) {
     audioStarted = false;
+    connectingMs = 0;
     connectedMs = millis() | 1;
   } else if (state == ESP_A2D_CONNECTION_STATE_DISCONNECTED) {
+    connectingMs = 0;
     connectedMs = 0;
     player::stop();  // a repeating call ends; nothing plays by itself after a reconnect
   }
@@ -232,6 +237,14 @@ void loop() {
 }
 
 bool connected() { return a2dp.is_connected(); }
+
+bool busy() {
+  // A connect and the stream start take ~35 KB of heap for a few seconds. Capped at 5 s each,
+  // so a speaker that is off (an attempt every 10 s) never keeps the page away for long.
+  uint32_t now = millis(), cing = connectingMs, ced = connectedMs;
+  if (cing && now - cing < 5000) return true;
+  return ced && !audioStarted && now - ced < 5000;
+}
 
 const char *state() {
   switch (a2dp.get_connection_state()) {
