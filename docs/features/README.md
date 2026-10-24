@@ -31,7 +31,7 @@ Specs for what comes after Phase 0 (the Wi-Fi test page and Bluetooth ADPCM play
 
 Defaults are written into the specs so work is not blocked; change them here and the specs follow.
 
-1. **Storage (F09):** how to get more room. Recommended: keep all 12 calls at 22.05 kHz, leave the app partition alone for now, and spend the first F09 PR on measuring real free space after the final page and library are in. If upload room is short, shrink the app partition to 2.25 MB.
+1. **Storage (F09):** how to get more room for uploads. 4 MB limits it to about 60 to 97 s of uploads depending on the real size of the built-ins, so the spec asks for at least 60 s, target 90 s. Recommended: keep all 12 calls at 22.05 kHz and spend the first F09 PR on reading the real numbers (the board was reported 91% full; the architecture doc estimates 60 to 65%) before choosing a partition layout.
 2. **Idle keep-alive (F07):** should the board send near-silence to the speaker so it never sleeps? Default is no (the speaker's own auto power-off is respected, and the board reconnects on the next tap).
 3. **Repeat gap (F04):** default is a seamless loop; a pause of 1 to 5 s between repeats would need a setting. Default is none.
 4. **Default Wi-Fi password (F05):** the first boot password stays `gobble123`, printed in the firmware README, and the page nags until it is changed. Say if you want a per-board password instead.

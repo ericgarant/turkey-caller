@@ -4,7 +4,7 @@
 
 ## Behavior
 
-- The board knows three link states for the speaker: connected and streaming ready, connected but suspended (A2DP suspend or no media started), and disconnected. `/api/status` exposes this (`bt` stays `connected` or `connecting`; add `stream`: `ready`, `suspended` or `down`).
+- The board knows three link states for the speaker: connected and streaming ready, connected but suspended (A2DP suspend or no media started), and disconnected. `/api/status` exposes this (`bt` stays `connected` or `connecting`; add `stream`: `ready`, `waking`, `suspended` or `down`, and an `error` text after a failed wake).
 - **Play after idle:** on a tap, if the stream is not ready, the board starts it (A2DP media start), or reconnects if the link is down, then plays. The page shows "Waking the speaker" while this happens.
 - **Pre-roll:** the first audible sample is preceded by short silence (about 250 ms) only when the stream had to be woken, so the speaker's amp has time to open and the call is not clipped at the start. It is not added when the stream is already ready.
 - **`/api/play` never waits:** the web handler runs on the AsyncTCP task and must not block, and an open request holds a socket and heap (F10). `POST /api/play` answers at once: 200 when the stream is ready and the sound starts now, 202 `{"waking":true}` when the stream has to be woken first, 409 when no speaker is saved or connecting is not possible. The outcome arrives through `/api/status` and `WS /ws` as the `stream` field and `playing`.

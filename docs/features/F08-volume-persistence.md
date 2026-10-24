@@ -4,7 +4,7 @@
 
 ## Behavior
 
-- Volume is 0 to 100, applied by software gain on the board (the speaker's own volume is not touched). First boot default is 60. Out-of-range input is clamped, not refused.
+- Volume is 0 to 100, applied by software gain on the board (the speaker's own volume is not touched). First boot default is 70 (what the merged firmware uses; the mock in `web/mock/server.mjs` starts at 60 and changes to 70 in the same PR as the next firmware change). Out-of-range input is clamped, not refused.
 - The level is saved to NVS about 2 s after the last change, not on every change, so dragging the slider does not wear flash. The write happens at a quiet moment: not in the audio path, never while a flash write could stall the decoder.
 - On boot the saved level is applied before the first sound can play.
 - The page, the WebSocket `volume` command, and `POST /api/volume` all end in the same saved state; every connected page shows the new level within 1 s.
