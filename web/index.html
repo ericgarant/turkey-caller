@@ -264,12 +264,13 @@ function connectWs(){
   ws.onerror=()=>{try{ws.close()}catch(_){}};
 }
 async function poll(){
-  // While the socket is up the board pushes; a slow poll still catches a silent socket.
-  const gap=wsOk?8000:3000;
+  // While the socket is up the board pushes at least every 10 s, so poll only when a push is
+  // overdue (each extra request costs the board memory, more so with two phones).
+  const gap=wsOk?12500:3000;
   if(Date.now()-lastOk>=gap-200){
     try{onStatus(await api("/api/status"))}catch(_){}
   }
-  if(Date.now()-lastOk>12000){
+  if(Date.now()-lastOk>(wsOk?16000:12000)){
     $("offTitle").textContent=restarting?"Restarting…":"Lost the caller";
     $("offText").textContent=restarting?"Rejoin the caller's Wi-Fi if your phone switched networks. This page reconnects by itself.":"Check that your phone is still on the caller's Wi-Fi. This page reconnects by itself.";
     $("offline").hidden=false;
