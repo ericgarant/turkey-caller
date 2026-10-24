@@ -331,9 +331,10 @@ void begin() {
   server.addHandler(&ws);
   server.on("/", HTTP_GET, handlePage);
   server.on("/api/status", HTTP_GET, handleStatus);
+  // on() also matches sub-paths and the first match wins, so /api/sounds/delete goes first.
+  server.on("/api/sounds/delete", HTTP_POST, notYet);  // F03
   server.on("/api/sounds", HTTP_GET, handleSounds);
   server.on("/api/sounds", HTTP_POST, notYet);         // upload: F03
-  server.on("/api/sounds/delete", HTTP_POST, notYet);  // F03
   server.on("/api/config", HTTP_ANY, notYet);          // F05
   server.on("/api/play", HTTP_POST, handlePlay);
   server.on("/api/stop", HTTP_POST, [](AsyncWebServerRequest *req) {
