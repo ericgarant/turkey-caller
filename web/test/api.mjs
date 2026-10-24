@@ -1,11 +1,19 @@
-// API contract test against the mock (the same contract the firmware must keep).
-// Run: npm run test:api (from web/). No browser needed.
+// API contract test: the contract the page relies on and the firmware must keep.
+//   node test/api.mjs                         starts the mock and runs against it (npm run test:api)
+//   node test/api.mjs http://192.168.4.1      runs against the board; read-only and play/stop/volume steps only
+//   DESTRUCTIVE=1 node test/api.mjs <url>     also runs steps that forget the speaker, change config, upload and delete
+// Every step runs; failures are listed at the end, so one mismatch does not hide the others.
 import { spawn } from "node:child_process";
 import assert from "node:assert/strict";
 
-const PORT = 8093, base = `http://localhost:${PORT}`;
-const server = spawn(process.execPath, ["mock/server.mjs", String(PORT)], { stdio: ["ignore", "pipe", "inherit"] });
-await new Promise((r) => server.stdout.once("data", r));
+let base = process.argv[2], server;
+const onMock = !base;
+if (onMock) {
+  server = spawn(process.execPath, ["mock/server.mjs", "8093"], { stdio: ["ignore", "pipe", "inherit"] });
+  await new Promise((r) => server.stdout.once("data", r));
+  base = "http://localhost:8093";
+}
+const destructive = onMock || process.env.DESTRUCTIVE === "1";
 
 const get = async (p) => (await fetch(base + p)).json();
 const post = async (p, form = {}) => {
@@ -20,8 +28,11 @@ const upload = async (name, size) => {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-let failed = false;
-const step = async (name, fn) => { await fn(); console.log("ok -", name); };
+const failures = [];
+const step = async (name, fn, { risky = false } = {}) => {
+  if (risky && !destructive) return console.log("skip -", name, "(set DESTRUCTIVE=1 to run on the board)");
+  try { await fn(); console.log("ok -", name); } catch (e) { failures.push(name); console.error("FAIL -", name + ":", e.message); }
+};
 try {
   await step("status has every field the page reads", async () => {
     const s = await get("/api/status");
@@ -71,7 +82,7 @@ try {
     assert.equal((await upload("x.mp3", 4000)).code, 409);
     assert.equal((await post("/api/sounds/delete", { id: "cluck" })).code, 409);
     await post("/api/stop");
-  });
+  }, { risky: true });
   await step("upload rules: bad name 400, too big 413, ok then delete, unknown delete 404", async () => {
     assert.equal((await upload("Bad Name.mp3", 4000)).code, 400);
     assert.equal((await upload("big.mp3", 2 * 1024 * 1024)).code, 413);
@@ -80,14 +91,14 @@ try {
     assert.equal((await post("/api/sounds/delete", { id: "owl_hoot" })).code, 200);
     assert.equal((await post("/api/sounds/delete", { id: "owl_hoot" })).code, 404);
     assert.equal((await get("/api/sounds")).length, 12);
-  });
+  }, { risky: true });
   await step("config validation: short password and long name refused, password never returned", async () => {
     assert.equal((await post("/api/config", { ap_ssid: "Turk", ap_pass: "short" })).code, 400);
     assert.equal((await post("/api/config", { ap_ssid: "x".repeat(33) })).code, 400);
     assert.equal((await post("/api/config", { ap_ssid: "" })).code, 400);
     const c = await get("/api/config");
     assert.ok(!("ap_pass" in c));
-  });
+  }, { risky: true });
   await step("forget stops playback; play without a speaker is 409; connect needs a name", async () => {
     await post("/api/play", { id: "cluck", loop: "1" });
     await post("/api/bt/forget");
@@ -99,16 +110,14 @@ try {
     assert.equal((await get("/api/status")).bt, "connecting");
     await sleep(2800);
     assert.equal((await get("/api/status")).bt, "connected");
-  });
+  }, { risky: true });
   await step("unknown API path is a JSON 404", async () => {
     const r = await fetch(base + "/api/nope");
     assert.equal(r.status, 404);
     assert.equal((await r.json()).ok, false);
   });
-} catch (e) {
-  failed = true;
-  console.error("FAIL -", e.message);
 } finally {
-  server.kill();
+  server?.kill();
 }
-process.exit(failed ? 1 : 0);
+if (failures.length) console.error(`\n${failures.length} failed:\n- ` + failures.join("\n- "));
+process.exit(failures.length ? 1 : 0);
