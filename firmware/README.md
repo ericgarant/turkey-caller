@@ -7,7 +7,7 @@ PlatformIO project for the Freenove ESP32-WROOM-32E (4 MB flash, no PSRAM).
 | File | Job |
 |---|---|
 | `src/main.cpp` | Boot order, serial health log every 5 s |
-| `src/player.*` | Decode task (Helix MP3), 32 KB ring buffer, volume, A2DP data callback |
+| `src/player.*` | Decode task (Helix MP3), 16 KB ring buffer, volume, A2DP data callback |
 | `src/bt.*` | A2DP source: finds the saved speaker by name, remembers its address, reconnects |
 | `src/web.*` | softAP `TurkeyCaller`, captive DNS, test page, JSON API |
 | `page/index.html` | The test page. Gzipped into `src/page.h` at build time by `scripts/embed_page.py` |

@@ -8,9 +8,10 @@
 namespace player {
 namespace {
 
-// Ring buffer of mono 16-bit PCM at 44.1 kHz. 32 KB is ~0.37 s, the most we can spare
-// without PSRAM once Wi-Fi and Bluetooth Classic are both up.
-constexpr size_t kRingBytes = 32 * 1024;
+// Ring buffer of mono 16-bit PCM at 44.1 kHz. 16 KB is ~0.19 s. The decoder runs several
+// times faster than real time, so this is plenty, and RAM is tight with Wi-Fi, a connected
+// A2DP speaker and the decoder all up (the 32 KB ring ran the heap out on the board).
+constexpr size_t kRingBytes = 16 * 1024;
 // Start sending a clip only once this much is buffered (~46 ms), so the first callback
 // after a tap does not count as an underrun.
 constexpr size_t kPrimeBytes = 4 * 1024;
@@ -73,7 +74,17 @@ struct Command {
 
 Ring ring;
 QueueHandle_t commands = nullptr;  // length 1, overwritten: the latest tap wins
-libhelix::MP3DecoderHelix mp3;
+// The decoder (~30 KB in several pieces) is allocated once at boot and kept. Allocating it per
+// clip failed on the board once the heap was fragmented by Wi-Fi and Bluetooth.
+class Decoder : public libhelix::MP3DecoderHelix {
+ public:
+  // Drop buffered input so the next write() starts a new clip; keeps the memory.
+  void restart() {
+    frame_buffer.reset();
+    frame_counter = 0;
+  }
+};
+Decoder mp3;
 File file;
 
 portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
@@ -92,6 +103,7 @@ volatile int32_t gainQ15 = 0;      // volume as a Q15 multiplier
 volatile uint32_t plays = 0;
 volatile uint32_t underruns = 0;
 bool warnedRate = false;
+bool decoderOk = false;
 
 void updateGain() {
   // Squared curve: sounds roughly linear to the ear and reaches 0 at 0.
@@ -134,10 +146,8 @@ void onPcm(MP3FrameInfo &info, short *pcm, size_t samples, void *) {
 void closeCurrent() {
   playing = false;  // the A2DP callback stops reading the ring
   aborting = true;
-  if (file) {
-    mp3.end();  // end() flushes the decoder; onPcm drops that output
-    file.close();
-  }
+  if (file) file.close();
+  mp3.restart();
   aborting = false;
   decodeDone = true;
   ring.reset();
@@ -154,8 +164,7 @@ void startClip(const char *id) {
     log_e("cannot open %s", path);
     return;
   }
-  if (!mp3.begin()) {
-    log_e("no memory for the MP3 decoder (free heap %u)", (unsigned)ESP.getFreeHeap());
+  if (!decoderOk) {
     file.close();
     return;
   }
@@ -166,7 +175,7 @@ void startClip(const char *id) {
   decodeDone = false;
   playing = true;
   plays = plays + 1;
-  log_i("play %s (%u bytes)", path, (unsigned)file.size());
+  Serial.printf("play %s heap=%u block=%u\n", id, (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
 }
 
 void task(void *) {
@@ -195,7 +204,7 @@ void task(void *) {
     if (n > 0) {
       mp3.write(buf, n);
     } else {
-      mp3.end();  // flush the last frames
+      mp3.flush();  // decode the last frames
       file.close();
       decodeDone = true;  // the A2DP callback clears `playing` once the ring drains
     }
@@ -214,8 +223,10 @@ void begin() {
   if (!ring.begin(kRingBytes)) log_e("no memory for the %u byte audio ring", (unsigned)kRingBytes);
   commands = xQueueCreate(1, sizeof(Command));
   mp3.setDataCallback(onPcm);
+  decoderOk = mp3.begin();
+  if (!decoderOk) log_e("no memory for the MP3 decoder (free heap %u)", (unsigned)ESP.getFreeHeap());
   // Core 1 (Arduino side); Bluetooth runs on core 0. Priority above loop() and the web server.
-  xTaskCreatePinnedToCore(task, "player", 6144, nullptr, 5, nullptr, 1);
+  xTaskCreatePinnedToCore(task, "player", 5120, nullptr, 5, nullptr, 1);
 }
 
 bool play(const char *id) {

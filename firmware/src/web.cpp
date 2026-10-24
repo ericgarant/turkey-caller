@@ -55,7 +55,16 @@ void sendError(AsyncWebServerRequest *req, int code, const char *msg) {
   req->send(code, "application/json", String("{\"ok\":false,\"error\":") + jsonStr(msg) + "}");
 }
 
+// With the heap nearly gone, a failed allocation inside the web server aborts the whole
+// firmware. Turn requests away early instead; the page simply retries.
+bool lowMemory(AsyncWebServerRequest *req) {
+  if (ESP.getMaxAllocHeap() >= 6144) return false;
+  req->send(503);
+  return true;
+}
+
 void handleStatus(AsyncWebServerRequest *req) {
+  if (lowMemory(req)) return;
   player::Stats p = player::stats();
   String j;
   j.reserve(400);
@@ -80,6 +89,7 @@ void handleStatus(AsyncWebServerRequest *req) {
 }
 
 void handleSounds(AsyncWebServerRequest *req) {
+  if (lowMemory(req)) return;
   String j = "[";
   File dir = LittleFS.open("/sounds");
   bool first = true;
@@ -112,6 +122,7 @@ void handleVolume(AsyncWebServerRequest *req) {
 }
 
 void handleDevices(AsyncWebServerRequest *req) {
+  if (lowMemory(req)) return;
   bt::Device list[12];
   size_t n = bt::devices(list, 12);
   String j = "[";
@@ -145,6 +156,7 @@ void begin() {
                 apOk ? "up" : "FAILED", WiFi.channel(), ip.toString().c_str(), dnsOk ? "up" : "FAILED");
 
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
+    if (lowMemory(req)) return;
     AsyncWebServerResponse *res = req->beginResponse(200, "text/html", kPageGz, sizeof(kPageGz));
     res->addHeader("Content-Encoding", "gzip");
     res->addHeader("Cache-Control", "no-store");  // phones must not keep an old page after a flash

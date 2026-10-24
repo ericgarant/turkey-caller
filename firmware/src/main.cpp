@@ -6,6 +6,9 @@
 #include "player.h"
 #include "web.h"
 
+// loop() only runs small housekeeping; the default 8 KB stack wastes RAM we need for audio.
+SET_LOOP_TASK_STACK_SIZE(4 * 1024);
+
 static void heapLog(const char *stage) {
   Serial.printf("heap after %-10s free=%u block=%u\n", stage, (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
 }

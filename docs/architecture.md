@@ -17,7 +17,7 @@ The illustrated version of this document lives at https://claude.ai/artifact/87p
 
 One 2.4 GHz radio is time-shared between Wi-Fi and BT Classic.
 
-- Decode into a ring buffer feeding the A2DP data callback. Phase 0 uses 32 KB of mono PCM (~0.37 s), the most that fits comfortably without PSRAM.
+- Decode into a ring buffer feeding the A2DP data callback. Phase 0 uses 16 KB of mono PCM (~0.19 s); the decoder is allocated once at boot and kept. A 32 KB ring plus a per-clip decoder ran the heap out on the board with Wi-Fi and a connected speaker.
 - The stock Arduino libraries left only ~13 KB of heap with Wi-Fi + A2DP (first board test). `firmware/platformio.ini` sets a `custom_sdkconfig`: Classic-only controller, BLE/HFP/SPP off, smaller BT task stacks and Wi-Fi buffers. AsyncTCP's task stack is cut to 6 KB.
 - Start the BT controller in Classic-only mode (`btStartMode(BT_MODE_CLASSIC_BT)`) before the A2DP library starts, which releases the BLE memory.
 - Keep Wi-Fi traffic small during playback; max 2 AP clients; CPU at 240 MHz.
