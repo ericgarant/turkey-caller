@@ -198,12 +198,16 @@ void loop() {
   // phones their join ("Connection failed" under BALANCE) and ~30 KB of heap when the first one
   // joined. A tap switches at once (notePlay), before the audio ring has filled.
   static uint32_t lastCoexCheck = 0, lastActive = 0;
+  static bool everActive = false;
   uint32_t now = millis(), tap = tapMs;
   if (tap || now - lastCoexCheck >= 100) {
     lastCoexCheck = now;
     if (tap) tapMs = 0;
-    if (tap || player::stats().playing) lastActive = now | 1;
-    bool active = lastActive && now - lastActive < 2000;
+    if (tap || player::stats().playing) {
+      lastActive = now;  // not now | 1: on an even millis() that is in the future and the hold wraps
+      everActive = true;
+    }
+    bool active = everActive && now - lastActive < 2000;
     setCoex(a2dp.is_connected() && active ? ESP_COEX_PREFER_BALANCE : ESP_COEX_PREFER_WIFI);
   }
   // Sometimes the stream never starts after a connect, and the first tap would be lost to the
