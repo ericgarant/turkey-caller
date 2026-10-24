@@ -56,7 +56,8 @@ try {
     assert.equal(await page.isDisabled('.call[data-id="cluck"]'), true);
     await page.click('nav [data-go="speaker"]');
     await page.click("#scanBtn");
-    await page.waitForSelector('#devList [data-i]', { timeout: 8000 });
+    await page.waitForFunction(() => document.querySelectorAll("#devList li .mono").length === 4, null, { timeout: 12000 });
+    assert.equal(await page.locator("#devList [data-i]").count(), 3, "nameless speaker has no Use button");
     await page.click('#devList [data-i="0"]');
     await page.waitForFunction(() => document.getElementById("spkText").textContent === "Level Box Slim", null, { timeout: 8000 });
   });
@@ -73,6 +74,16 @@ try {
     await page.click('[data-del="owl_hoot"]');
     await page.click('[data-del="owl_hoot"]');
     await page.waitForFunction(() => document.querySelectorAll("#sndList li").length === 12);
+  });
+  await step("uploading over an existing sound asks first", async () => {
+    await page.setInputFiles("#upFile", { name: "Cluck.mp3", mimeType: "audio/mpeg", buffer: Buffer.alloc(9000, 1) });
+    await page.waitForSelector("#upYes");
+    await page.click("#upNo");
+    assert.equal(await page.isVisible("#upYes"), false);
+    await page.setInputFiles("#upFile", { name: "Cluck.mp3", mimeType: "audio/mpeg", buffer: Buffer.alloc(9000, 1) });
+    await page.click("#upYes");
+    await page.waitForFunction(() => /Replaced cluck/.test(document.getElementById("toast").textContent));
+    assert.equal(await page.locator("#sndList li").count(), 12);
   });
   await step("short Wi-Fi password is refused before sending", async () => {
     await page.fill("#apPass", "short");

@@ -5,9 +5,9 @@ The control page the ESP32 serves: **Calls**, **Speaker** and **Settings** scree
 | Path | What |
 |---|---|
 | `index.html` | The page |
-| `build.py` | Gzips the page into `firmware/data/www/index.html.gz` (git-ignored) and fails over 20 KB |
+| `build.py` | Gzips the page into `firmware/src/web_page.h` (git-ignored) and fails over 20 KB |
 | `mock/server.mjs` | Fake ESP32 API with no dependencies, so the page can be built and tested without the board |
-| `test/smoke.mjs` | Playwright run of the main flows against the mock at phone width |
+| `test/smoke.mjs` | Playwright run of the main flows against the mock at phone width. CI runs it on every change under `web/` |
 
 ## Use it
 
@@ -15,14 +15,14 @@ The control page the ESP32 serves: **Calls**, **Speaker** and **Settings** scree
 cd web
 node mock/server.mjs        # then open http://localhost:8080 (phone width in dev tools)
 npm install && npm test     # smoke test against the mock
-python3 build.py            # before: cd ../firmware && pio run -t uploadfs
+python3 build.py            # writes firmware/src/web_page.h, then flash with pio run -t upload
 ```
 
 ## What the page does
 
 - **Calls:** one button per sound, grouped Soft calls / Louder calls / Use with care (gobble and putt). Tap to play, tap the playing call again to stop. "Repeat" loops the call. Stop and volume (slider plus − / + steps for gloved hands) stay pinned at the bottom.
-- **Speaker:** status, search (about 10 s, stops playback), Use, Forget (tap twice).
-- **Settings:** sound list with storage meter, upload and delete (refused while playing), Wi-Fi name and password, device name, and device health.
+- **Speaker:** status, search (about 10 s, stops playback), Use, Forget (tap twice). Speakers without a name have no Use button until the firmware connects by address.
+- **Settings:** sound list with storage meter, upload (asks before replacing a sound with the same name) and delete (refused while playing), Wi-Fi name and password, device name, and device health.
 - **Dawn mode** (moon button): dim, red-only colors to keep night vision. Remembered on the phone. Otherwise the page follows the phone's light or dark setting.
 
 ## API contract with the firmware
@@ -43,4 +43,6 @@ Agreed with the firmware thread; the summary table is in `../docs/architecture.m
 | `POST /api/sounds/delete` `id` | 409 while playing |
 | `WS /ws` | Board pushes the `/api/status` JSON on change, every 2 s while playing, else every 10 s. The page sends `{"cmd":"volume","level":N}` over it; play and stop go over HTTP so errors come back as status codes. Without the socket the page polls `/api/status` every 3 s |
 
-The firmware serves the page from LittleFS at `/www/index.html.gz` with `Content-Encoding: gzip`.
+## How the page reaches the board
+
+The page is compiled into the firmware, not stored in LittleFS. `pio run -t uploadfs` rewrites the whole LittleFS partition, so a page kept there would wipe every sound uploaded from the phone each time the page changed. `build.py` turns the page into `firmware/src/web_page.h` (`kWebPageGz`, `kWebPageGzLen`, about 10 KB); the firmware runs it from a PlatformIO pre-build script and serves it at `/` with `Content-Encoding: gzip`. Updating the page is then a normal `pio run -t upload`, and the sounds stay put.

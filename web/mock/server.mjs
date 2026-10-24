@@ -26,6 +26,7 @@ const NEARBY = [
   { name: "Level Box Slim", addr: "5C:49:7D:1A:20:8E", rssi: -52 },
   { name: "Cooboom 20W", addr: "41:42:1F:6B:03:C2", rssi: -67 },
   { name: "JBL Flip 5", addr: "F8:DF:15:90:4A:11", rssi: -84 },
+  { name: "", addr: "00:1A:7D:DA:71:13", rssi: -88 }, // nameless: Phase 0 cannot pick it
 ];
 
 const cfg = { ap_ssid: "TurkeyCaller", ap_pass: "gobble123", device_name: "Turkey Caller" };
@@ -122,7 +123,7 @@ const server = http.createServer(async (req, res) => {
     case "POST /api/volume": if (p.level === undefined) return fail(res, 400, "missing level"); st.volume = clamp(+p.level); push(); return ok(res);
     case "POST /api/bt/scan":
       stop(); scanning = true; devices = [];
-      NEARBY.forEach((d, i) => setTimeout(() => devices.push(d), 2000 + i * 2500));
+      NEARBY.forEach((d, i) => setTimeout(() => devices.push(d), 2000 + i * 2000));
       setTimeout(() => { scanning = false; }, 10000);
       return ok(res);
     case "GET /api/bt/devices": return json(res, 200, { scanning, devices });

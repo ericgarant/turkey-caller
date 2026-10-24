@@ -335,8 +335,9 @@ function setVol(v,final){
 }
 $("vol").oninput=e=>setVol(+e.target.value);
 $("vol").onchange=e=>setVol(+e.target.value,true);
-$("volDn").onclick=()=>setVol(st.volume-5,true);
-$("volUp").onclick=()=>setVol(st.volume+5,true);
+// Steps need the board's volume first, or null-5 would send 0
+$("volDn").onclick=()=>{if(st.volume!=null)setVol(st.volume-5,true)};
+$("volUp").onclick=()=>{if(st.volume!=null)setVol(st.volume+5,true)};
 $("stopBtn").onclick=stop;
 
 // ---- Speaker ----
@@ -344,7 +345,7 @@ const sigBars=r=>{const n=r>-60?4:r>-70?3:r>-80?2:1;return `<span class="sig" ti
 function renderDevices(scanning){
   const ul=$("devList");
   if(scanning&&!devices.length){ul.innerHTML=`<li class="empty"><span class="spin"></span>Searching…</li>`;return}
-  ul.innerHTML=devices.map((d,i)=>`<li>${sigBars(d.rssi)}<div class="grow"><div class="nm">${esc(d.name||"Unnamed")}</div><div class="sub mono">${esc(d.addr||"")}</div></div><button class="btn" type="button" data-i="${i}">Use</button></li>`).join("")
+  ul.innerHTML=devices.map((d,i)=>`<li>${sigBars(d.rssi)}<div class="grow"><div class="nm">${esc(d.name||"Unnamed")}</div><div class="sub mono">${esc(d.addr||"")}</div></div>${d.name?`<button class="btn" type="button" data-i="${i}">Use</button>`:""}</li>`).join("")
     +(scanning?`<li class="empty"><span class="spin"></span>Still searching…</li>`:"");
   ul.querySelectorAll("[data-i]").forEach(b=>b.onclick=()=>useSpeaker(devices[+b.dataset.i]));
 }
@@ -362,7 +363,7 @@ $("scanBtn").onclick=async()=>{
   scanUntil=Date.now()+12000;setTimeout(scanPoll,1500);
 };
 async function useSpeaker(d){
-  try{await api("/api/bt/connect",{addr:d.addr||"",name:d.name||d.addr||""});
+  try{await api("/api/bt/connect",{addr:d.addr||"",name:d.name});
     st.bt="connecting";st.speaker=d.name;paint();toast("Connecting to "+(d.name||d.addr));lastOk=Date.now();restarting=Date.now()}
   catch(e){toast(why(e))}
 }
@@ -382,22 +383,32 @@ function renderSounds(){
     catch(e){b.disabled=false;toast(/409|playing/i.test(e.message)?"Stop the call first, then delete":why(e))}
   });
 }
+const UP_NOTE=$("upNote").innerHTML;
 $("upFile").onchange=e=>{
   const f=e.target.files[0];e.target.value="";if(!f)return;
   const id=f.name.replace(/\.mp3$/i,"").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"").slice(0,24);
   if(!/\.mp3$/i.test(f.name)||!id){toast("Pick an .mp3 file");return}
+  const old=sounds.find(s=>s.id===id);
+  if(!old)return upload(f,id);
+  // Same name as an existing sound: ask before replacing it
+  const note=$("upNote");
+  note.innerHTML=`<b>${esc(old.name)}</b> is already on the caller. <button class="btn" type="button" id="upYes">Replace it</button> <button class="btn" type="button" id="upNo">Keep it</button>`;
+  $("upYes").onclick=()=>{note.innerHTML=UP_NOTE;upload(f,id,old.bytes)};
+  $("upNo").onclick=()=>{note.innerHTML=UP_NOTE};
+};
+function upload(f,id,freed){
   if(st.playing){toast("Stop the call first, then add the sound");return}
-  if(st.fsFree!=null&&f.size>st.fsFree-8192){toast(`Not enough room: ${fmtKB(f.size)} needed, ${fmtKB(st.fsFree)} free`);return}
+  if(st.fsFree!=null&&f.size>st.fsFree+(freed||0)-8192){toast(`Not enough room: ${fmtKB(f.size)} needed, ${fmtKB(st.fsFree)} free`);return}
   const fd=new FormData();fd.append("file",f,id+".mp3");
-  const x=new XMLHttpRequest(),note=$("upNote"),old=note.textContent;
+  const x=new XMLHttpRequest(),note=$("upNote");
   x.open("POST","/api/sounds");
   x.upload.onprogress=p=>{if(p.lengthComputable)note.textContent=`Uploading ${id}.mp3… ${Math.round(p.loaded/p.total*100)}%`};
-  x.onload=()=>{note.textContent=old;
-    if(x.status<300){toast("Added "+id);loadSounds()}
+  x.onload=()=>{note.innerHTML=UP_NOTE;
+    if(x.status<300){toast((freed?"Replaced ":"Added ")+id);loadSounds()}
     else toast(x.status===409?"Stop the call first, then add the sound":x.status===413?"Not enough room on the caller":"Upload failed ("+x.status+")")};
-  x.onerror=()=>{note.textContent=old;toast("Upload failed. Are you on the caller's Wi-Fi?")};
+  x.onerror=()=>{note.innerHTML=UP_NOTE;toast("Upload failed. Are you on the caller's Wi-Fi?")};
   x.send(fd);
-};
+}
 
 // ---- Settings: config ----
 async function loadConfig(){
@@ -425,6 +436,7 @@ function paint(){
   $("noSpkText").innerHTML=st.speaker?`<b>${esc(st.speaker)} is not connected.</b> Turn it on; the caller finds it by itself.`:`<b>No speaker connected.</b> Pick one under Speaker.`;
   document.querySelectorAll(".call").forEach(b=>b.disabled=!conn);
   if(st.volume!=null&&document.activeElement!==$("vol")&&Date.now()-volSentAt>1000){$("vol").value=st.volume;$("volTxt").textContent=st.volume}
+  $("volDn").disabled=$("volUp").disabled=$("vol").disabled=st.volume==null;
   document.querySelectorAll("[data-del]").forEach(b=>b.disabled=!!st.playing);
   if(st.fsTotal){const used=st.fsTotal-st.fsFree;$("fsText").textContent=`${fmtKB(used)} used of ${fmtKB(st.fsTotal)}`;$("fsBar").style.width=(used/st.fsTotal*100)+"%"}
   const up=st.uptime||0,rows=[["Free memory",st.heap!=null&&fmtKB(st.heap)],["Lowest free memory",st.minHeap!=null&&fmtKB(st.minHeap)],
