@@ -157,6 +157,19 @@ void handleConnect(AsyncWebServerRequest *req) {
 
 void begin() {
   fsFree = LittleFS.totalBytes() - LittleFS.usedBytes();  // Phase 2: recompute after upload/delete
+  // Log phones joining and leaving, with the reason, to diagnose "Connection failed" on a phone.
+  WiFi.onEvent([](arduino_event_id_t event, arduino_event_info_t info) {
+    if (event == ARDUINO_EVENT_WIFI_AP_STACONNECTED) {
+      const uint8_t *m = info.wifi_ap_staconnected.mac;
+      Serial.printf("phone joined %02x:%02x:%02x:%02x:%02x:%02x\n", m[0], m[1], m[2], m[3], m[4], m[5]);
+    } else if (event == ARDUINO_EVENT_WIFI_AP_STADISCONNECTED) {
+      const uint8_t *m = info.wifi_ap_stadisconnected.mac;
+      Serial.printf("phone left %02x:%02x:%02x:%02x:%02x:%02x reason %u\n", m[0], m[1], m[2], m[3], m[4], m[5],
+                    (unsigned)info.wifi_ap_stadisconnected.reason);
+    } else if (event == ARDUINO_EVENT_WIFI_AP_STAIPASSIGNED) {
+      Serial.printf("phone got ip %s\n", IPAddress(info.wifi_ap_staipassigned.ip.addr).toString().c_str());
+    }
+  });
   WiFi.mode(WIFI_AP);
   bool apOk = WiFi.softAP(kApName, kApPassword, kApChannel, 0, kMaxClients);
   IPAddress ip = WiFi.softAPIP();
