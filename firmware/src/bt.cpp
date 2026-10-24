@@ -101,11 +101,24 @@ bool onFound(const char *name, esp_bd_addr_t addr, int rssi) {
   return match;
 }
 
+void setCoex(esp_coex_prefer_t p) {
+  esp_err_t err = esp_coex_preference_set(p);
+  Serial.printf("radio preference %s: %s\n",
+                p == ESP_COEX_PREFER_BT ? "bluetooth" : p == ESP_COEX_PREFER_WIFI ? "wifi" : "balance",
+                esp_err_to_name(err));
+}
+
 void onState(esp_a2d_connection_state_t state, void *) {
   Serial.printf("speaker %s\n", a2dp.to_str(state));
-  // While searching, give Wi-Fi the radio so phones can still join; once connected, share it.
-  esp_coex_preference_set(state == ESP_A2D_CONNECTION_STATE_CONNECTED ? ESP_COEX_PREFER_BALANCE
-                                                                       : ESP_COEX_PREFER_WIFI);
+  // While searching, give Wi-Fi the radio so phones can still join. Once connected, the audio
+  // stream needs it more than the page's small requests do: under BALANCE the stream stalled
+  // as soon as a call started with a phone on the page.
+  setCoex(state == ESP_A2D_CONNECTION_STATE_CONNECTED ? ESP_COEX_PREFER_BT : ESP_COEX_PREFER_WIFI);
+}
+
+void onAudio(esp_a2d_audio_state_t state, void *) {
+  Serial.printf("speaker audio %s\n", state == ESP_A2D_AUDIO_STATE_STARTED ? "started"
+                                        : state == ESP_A2D_AUDIO_STATE_SUSPEND ? "suspended" : "stopped");
 }
 
 void onDiscovery(esp_bt_gap_discovery_state_t st) {
@@ -117,7 +130,7 @@ void startStack() {
   if (started) return;
   started = true;
   startedMs = millis();
-  esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
+  setCoex(ESP_COEX_PREFER_WIFI);
   a2dp.start();
   a2dp.searchOnce();
   Serial.printf("Bluetooth started, saved speaker: \"%s\"\n", speaker.c_str());
@@ -139,6 +152,7 @@ void begin() {
   a2dp.set_ssid_callback(onFound);
   a2dp.set_on_connection_state_changed(onState);
   a2dp.set_discovery_mode_callback(onDiscovery);
+  a2dp.set_on_audio_state_changed(onAudio);
   a2dp.set_data_callback_in_frames(player::fillFrames);
   // Reconnect straight to the last speaker's address; search by name only when there is none.
   a2dp.set_auto_reconnect(speaker.length() > 0);
