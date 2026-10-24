@@ -36,7 +36,7 @@ const step = async (name, fn, { risky = false } = {}) => {
 try {
   await step("status has every field the page reads", async () => {
     const s = await get("/api/status");
-    for (const k of ["bt", "speaker", "playing", "current", "loop", "pos_ms", "len_ms", "volume", "heap", "minHeap",
+    for (const k of ["bt", "speaker", "playing", "current", "loop", "repeat", "pos_ms", "len_ms", "volume", "heap", "minHeap",
       "fsFree", "fsTotal", "clients", "uptime", "underruns", "version"]) assert.ok(k in s, `missing ${k}`);
     assert.ok(["idle", "searching", "connecting", "connected"].includes(s.bt));
   });
@@ -68,6 +68,15 @@ try {
     await post("/api/play", { id: "putt", loop: "0" }); // 1.2 s
     await sleep(1600);
     assert.equal((await get("/api/status")).playing, false);
+  });
+  await step("Repeat is one switch on the board for every phone; needs on", async () => {
+    const before = (await get("/api/status")).repeat;
+    assert.equal((await post("/api/repeat", { on: "1" })).code, 200);
+    assert.equal((await get("/api/status")).repeat, true);
+    assert.equal((await post("/api/repeat", { on: "0" })).code, 200);
+    assert.equal((await get("/api/status")).repeat, false);
+    assert.equal((await post("/api/repeat")).code, 400);
+    await post("/api/repeat", { on: before ? "1" : "0" });
   });
   await step("volume clamps to 0..100 and needs a level", async () => {
     const before = (await get("/api/status")).volume; // put it back afterwards, also on the board

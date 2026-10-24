@@ -30,7 +30,7 @@ const NEARBY = [
 ];
 
 const cfg = { ap_ssid: "TurkeyCaller", ap_pass: "gobble123", device_name: "Turkey Caller" };
-const st = { bt: "connected", speaker: "Level Box Slim", playing: false, current: "", loop: false, volume: 70 };
+const st = { bt: "connected", speaker: "Level Box Slim", playing: false, current: "", loop: false, repeat: false, volume: 70 };
 let playStart = 0, playTimer = null, scanning = false, devices = [];
 const boot = Date.now();
 
@@ -75,6 +75,7 @@ function wsFrames(sock, buf) {
         if (m.cmd === "play") play(m.id, !!m.loop);
         if (m.cmd === "stop") stop();
         if (m.cmd === "volume") { st.volume = clamp(+m.level); push(); }
+        if (m.cmd === "repeat") setRepeat(!!m.on && m.on !== "0");
       } catch { /* ignore bad frames */ }
     }
   }
@@ -88,9 +89,18 @@ function play(id, loop) {
   if (!s) return "bad sound id";
   if (st.bt !== "connected") return "speaker not connected";
   clearTimeout(playTimer);
-  Object.assign(st, { playing: true, current: id, loop });
+  Object.assign(st, { playing: true, current: id, loop, repeat: loop });
   playStart = Date.now();
   if (!loop) playTimer = setTimeout(stop, s.ms);
+  push();
+}
+function setRepeat(on) {
+  st.repeat = on;
+  if (st.playing && st.loop !== on) {  // like the board: the call playing now follows the switch
+    st.loop = on;
+    clearTimeout(playTimer);
+    if (!on) { const s = sounds.find((x) => x.id === st.current); playTimer = setTimeout(stop, s.ms - ((Date.now() - playStart) % s.ms)); }
+  }
   push();
 }
 function stop() { clearTimeout(playTimer); st.playing = false; st.current = ""; push(); }
@@ -120,6 +130,7 @@ const server = http.createServer(async (req, res) => {
     case "GET /api/sounds": return json(res, 200, sounds);
     case "POST /api/play": { const e = play(p.id, p.loop === "1" || p.loop === "true"); return e ? fail(res, e.startsWith("speaker") ? 409 : 400, e) : ok(res); }
     case "POST /api/stop": stop(); return ok(res);
+    case "POST /api/repeat": if (p.on === undefined) return fail(res, 400, "missing on"); setRepeat(p.on === "1" || p.on === "true"); return ok(res);
     case "POST /api/volume": if (p.level === undefined) return fail(res, 400, "missing level"); st.volume = clamp(+p.level); push(); return ok(res);
     case "POST /api/bt/scan":
       stop(); scanning = true; devices = [];

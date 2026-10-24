@@ -33,6 +33,7 @@ DNSServer dns;
 volatile bool speakerPending = false;
 char pendingSpeaker[33] = "";
 char etag[12] = "";
+volatile bool repeatOn = false;      // the Repeat switch, shared by every page (off after a restart)
 volatile int inFlight = 0;           // HTTP requests being served (AsyncTCP task; reset by loop())
 volatile uint32_t lastRequestMs = 0;  // hash of the built-in page, so a reflashed page is fetched again
 
@@ -99,6 +100,8 @@ String statusJson() {
   jsonStr(j, p.current);
   j += ",\"loop\":";
   j += p.playing && p.loop ? "true" : "false";
+  j += ",\"repeat\":";
+  j += repeatOn ? "true" : "false";
   j += ",\"pos_ms\":" + String(p.posMs);
   j += ",\"len_ms\":" + String(p.lenMs);
   j += ",\"volume\":" + String(p.volume);
@@ -150,7 +153,9 @@ void handlePlay(AsyncWebServerRequest *req) {
     Serial.println("tap refused: speaker not connected");
     return sendError(req, 409, "No speaker connected");
   }
-  bool loop = truthy(param(req, "loop"));
+  String loopParam = param(req, "loop");
+  bool loop = loopParam.isEmpty() ? (bool)repeatOn : truthy(loopParam);
+  repeatOn = loop;  // a play with loop= also sets the shared switch
   if (!player::play(id.c_str(), loop)) return sendError(req, 400, "unknown sound");
   Serial.printf("tap %s%s\n", id.c_str(), loop ? " (repeat)" : "");
   sendOk(req);
@@ -205,6 +210,12 @@ void notYet(AsyncWebServerRequest *req) { sendError(req, 501, "not available in 
 volatile bool pushNow = false;  // something changed: push status on the next loop()
 
 // Commands from the page: {"cmd":"volume","level":N}, also {"cmd":"stop"}.
+void setRepeat(bool on) {
+  repeatOn = on;
+  player::setLoop(on);
+  pushNow = true;
+}
+
 void onCommand(const char *msg) {
   if (strstr(msg, "\"cmd\":\"volume\"")) {
     const char *l = strstr(msg, "\"level\":");
@@ -215,6 +226,9 @@ void onCommand(const char *msg) {
   } else if (strstr(msg, "\"cmd\":\"stop\"")) {
     player::stop();
     pushNow = true;
+  } else if (strstr(msg, "\"cmd\":\"repeat\"")) {
+    const char *o = strstr(msg, "\"on\":");
+    if (o) setRepeat(o[5] == 't' || o[5] == '1' || (o[5] == '"' && o[6] == '1'));
   }
 }
 
@@ -243,12 +257,12 @@ void onWsEvent(AsyncWebSocket *, AsyncWebSocketClient *client, AwsEventType type
 struct Shown {
   char bt[16];
   char current[32];
-  bool playing, loop;
+  bool playing, loop, repeat;
   uint8_t volume;
   int clients;
   size_t speakerLen;
   bool operator!=(const Shown &o) const {
-    return strcmp(bt, o.bt) || strcmp(current, o.current) || playing != o.playing || loop != o.loop ||
+    return strcmp(bt, o.bt) || strcmp(current, o.current) || playing != o.playing || loop != o.loop || repeat != o.repeat ||
            volume != o.volume || clients != o.clients || speakerLen != o.speakerLen;
   }
 };
@@ -261,6 +275,7 @@ Shown shownNow() {
   s.playing = p.playing;
   s.loop = p.loop;
   s.volume = p.volume;
+  s.repeat = repeatOn;
   s.clients = WiFi.softAPgetStationNum();
   s.speakerLen = bt::speakerName().length();
   return s;
@@ -368,6 +383,12 @@ void begin() {
     sendOk(req);
   });
   server.on("/api/volume", HTTP_POST, handleVolume);
+  server.on("/api/repeat", HTTP_POST, [](AsyncWebServerRequest *req) {
+    String on = param(req, "on");
+    if (on.isEmpty()) return sendError(req, 400, "missing on");
+    setRepeat(truthy(on));
+    sendOk(req);
+  });
   server.on("/api/bt/devices", HTTP_GET, handleDevices);
   server.on("/api/bt/scan", HTTP_POST, [](AsyncWebServerRequest *req) {
     Serial.println("search requested");

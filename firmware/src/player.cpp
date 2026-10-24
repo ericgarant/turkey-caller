@@ -95,7 +95,7 @@ volatile uint32_t underruns = 0;
 volatile uint32_t fills = 0;       // A2DP data callbacks so far
 volatile bool stalled = false;     // the speaker stopped taking audio mid-clip
 volatile uint32_t stalls = 0;
-volatile bool looping = false;     // the current clip repeats (written by the decode task)
+volatile bool looping = false;     // the current clip repeats (set at start and by setLoop())
 volatile uint32_t lenMs = 0;       // length of the current clip
 volatile uint32_t servedFrames = 0;  // callback-only writer: 44.1 kHz frames of the current clip sent
 // Clips are WAV files: IMA ADPCM (what tools/audio produces, 4 bits a sample, no decoder
@@ -225,7 +225,7 @@ bool openWav(const char *path) {
 bool decodeSome() {
   static uint8_t buf[wav::kMaxBlock];  // one ADPCM block (ffmpeg writes 1024-byte blocks)
   if (clip.dataLeft == 0) {
-    if (!clip.loop) return false;
+    if (!looping) return false;  // Repeat can be switched off mid-call: this pass is the last
     // Repeat: back to the first block. The resampler keeps its state, so the join is seamless.
     file.seek(clip.info.dataStart);
     clip.dataLeft = clip.info.dataBytes;
@@ -346,6 +346,10 @@ bool play(const char *id, bool loop) {
   strlcpy(cmd.id, id, sizeof(cmd.id));
   xQueueOverwrite(commands, &cmd);
   return true;
+}
+
+void setLoop(bool on) {
+  if (playing) looping = on;
 }
 
 void stop() {

@@ -31,17 +31,18 @@ Agreed with the firmware thread; the summary table is in `../docs/architecture.m
 
 | Call | Notes for the page |
 |---|---|
-| `GET /api/status` | `bt` is `idle`, `searching`, `connecting` or `connected`; also `speaker`, `playing`, `current`, `loop`, `pos_ms`, `len_ms`, `volume`, `heap`, `minHeap`, `fsFree`, `fsTotal`, `clients`, `uptime`, `underruns`, `version` |
+| `GET /api/status` | `bt` is `idle`, `searching`, `connecting` or `connected`; also `speaker`, `playing`, `current`, `loop` (the call playing now repeats), `repeat` (the shared Repeat switch), `pos_ms`, `len_ms`, `volume`, `heap`, `minHeap`, `fsFree`, `fsTotal`, `clients`, `uptime`, `underruns`, `version` |
 | `GET /api/sounds` | `[{id, name, group, bytes, ms}]` in `sounds/index.json` order. `group` is `soft`, `loud` or `care`; sounds without one are shown under "Other sounds". A plain list of ids (Phase 0) also works |
 | `POST /api/play` `id`, `loop=0/1` | 409 when no speaker is connected |
 | `POST /api/stop`, `POST /api/volume` `level` | |
+| `POST /api/repeat` `on=0/1` | Sets the Repeat switch on the board, shared by every phone; also changes whether the call playing now repeats. A play's `loop` sets it too. Off after a restart |
 | `POST /api/bt/scan`, `GET /api/bt/devices` | Devices reply `{scanning, devices:[{name, addr, rssi}]}`; a bare array also works |
 | `POST /api/bt/connect` `addr`, `name` | Firmware connects by `addr`, shows `name`; `name` must not be empty. It may restart; the page shows "Restarting" and reconnects |
 | `POST /api/bt/forget` | |
 | `GET /api/config` → `ap_ssid`, `device_name`; `POST /api/config` adds `ap_pass` | Password is never returned; empty means unchanged. Saving restarts the board |
 | `POST /api/sounds` multipart `file` | The page renames the file to `a-z0-9_` (max 24 chars) + `.wav`. 409 while playing, 413 when full |
 | `POST /api/sounds/delete` `id` | 409 while playing |
-| `WS /ws` | Board pushes the `/api/status` JSON on change, every 2 s while playing, else every 10 s. The page sends `{"cmd":"volume","level":N}` over it; play and stop go over HTTP so errors come back as status codes. Without the socket the page polls `/api/status` every 3 s |
+| `WS /ws` | Board pushes the `/api/status` JSON on change, every 2 s while playing, else every 10 s. The page sends `{"cmd":"volume","level":N}` and `{"cmd":"repeat","on":true}` over it; play and stop go over HTTP so errors come back as status codes. Without the socket the page polls `/api/status` every 3 s |
 
 ## How the page reaches the board
 
