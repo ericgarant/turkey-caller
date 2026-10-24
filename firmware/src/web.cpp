@@ -21,6 +21,10 @@ constexpr int kMaxClients = 2;
 constexpr size_t kMaxSockets = 3;            // two phones plus one stale socket being replaced
 constexpr uint32_t kPushPlayingMs = 2000;    // status push while a call plays
 constexpr uint32_t kPushIdleMs = 10000;      // status push otherwise
+// HTTP requests served at once. Each open connection holds lwIP and Wi-Fi buffers; a page load
+// on two phones at once (plus captive-portal probes) dipped the heap under 40 KB. The page
+// loads one thing at a time and retries a 503, so 4 covers two phones.
+constexpr int kMaxRequests = 4;
 
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
@@ -329,6 +333,23 @@ void begin() {
 
   ws.onEvent(onWsEvent);
   server.addHandler(&ws);
+  // Cap requests in flight. The socket is left out: its connection is handed over to the
+  // WebSocket, so the request's disconnect callback would never run.
+  server.addMiddleware([](AsyncWebServerRequest *req, ArMiddlewareNext next) {
+    static int inFlight = 0;  // only touched on the AsyncTCP task
+    if (req->url() == "/ws") return next();
+    if (inFlight >= kMaxRequests) {
+      Serial.printf("503 %s: busy\n", req->url().c_str());
+      AsyncWebServerResponse *res = req->beginResponse(503, "application/json", "{\"ok\":false,\"error\":\"busy\"}");
+      res->addHeader("Retry-After", "1");
+      return req->send(res);
+    }
+    inFlight++;
+    req->onDisconnect([] { inFlight--; });
+    next();
+  });
+  // No icon: without this the browser's /favicon.ico would be redirected and fetch the page again.
+  server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *req) { req->send(204); });
   server.on("/", HTTP_GET, handlePage);
   server.on("/api/status", HTTP_GET, handleStatus);
   // on() also matches sub-paths and the first match wins, so /api/sounds/delete goes first.
