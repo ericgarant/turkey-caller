@@ -213,6 +213,7 @@ volatile bool pushNow = false;  // something changed: push status on the next lo
 void setRepeat(bool on) {
   repeatOn = on;
   player::setLoop(on);
+  Serial.printf("repeat %s heap=%u min=%u\n", on ? "on" : "off", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMinFreeHeap());
   pushNow = true;
 }
 
@@ -240,6 +241,8 @@ void onWsEvent(AsyncWebSocket *, AsyncWebSocketClient *client, AwsEventType type
       client->close();
       return;
     }
+    Serial.printf("ws open #%u (%u sockets) heap=%u min=%u\n", (unsigned)client->id(), (unsigned)ws.count(),
+                  (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMinFreeHeap());
     pushNow = true;  // the new page wants status straight away
   } else if (type == WS_EVT_DATA) {
     AwsFrameInfo *info = (AwsFrameInfo *)arg;
@@ -295,11 +298,16 @@ void pushLoop() {
   Shown s = shownNow();
   uint32_t every = s.playing ? kPushPlayingMs : kPushIdleMs;
   if (!pushNow && !(s != last) && now - lastPush < every) return;
-  if (bt::busy() || ESP.getMaxAllocHeap() < 6144 || !ws.availableForWriteAll()) return;  // try again shortly
+  if (bt::busy() || ESP.getMaxAllocHeap() < 6144) return;  // try again shortly
   pushNow = false;
   last = s;
   lastPush = now;
-  ws.textAll(statusJson());
+  // Each push is a full snapshot, so a phone that hasn't taken the last one (screen off, weak
+  // signal) gets nothing new: queued snapshots used to pile up, ~0.5 KB each, up to 32 per phone.
+  String j = statusJson();
+  for (auto &c : ws.getClients()) {
+    if (c.status() == WS_CONNECTED && c.queueLen() == 0) c.text(j);
+  }
 }
 
 // FNV-1a over the gzipped page.
