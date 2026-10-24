@@ -371,6 +371,7 @@ void loop() {
     prefs.begin("player", false);
     prefs.putUChar("volume", volume);
     prefs.end();
+    Serial.printf("volume %u saved\n", (unsigned)volume);
   }
 }
 
@@ -413,8 +414,11 @@ int32_t fillFrames(Frame *frames, int32_t count) {
     if (ring.available() >= kPrimeBytes || decodeDone) primedGen = g;
   }
 
+  // Volume steps ramp over ~6 ms (one Q15 step per sample at most 128), so a change never clicks.
+  static int32_t gain = -1;
+  if (gain < 0) gain = gainQ15;
+  const int32_t target = gainQ15;
   if (active && primedGen == g) {
-    int32_t gain = gainQ15;
     while (done < count) {
       size_t want = min<size_t>(count - done, sizeof(mono) / sizeof(mono[0]));
       size_t got = ring.read((uint8_t *)mono, want * sizeof(int16_t)) / sizeof(int16_t);
@@ -425,6 +429,7 @@ int32_t fillFrames(Frame *frames, int32_t count) {
         servedFrames = 0;
       }
       for (size_t i = 0; i < got; i++) {
+        if (gain != target) gain += constrain(target - gain, -128, 128);
         int32_t s = ((int32_t)mono[i] * gain) >> 15;
         if (fadeIn < kFadeSamples) s = s * fadeIn++ / kFadeSamples;
         frames[done + i].channel1 = (int16_t)s;

@@ -30,7 +30,7 @@ const NEARBY = [
 ];
 
 const cfg = { ap_ssid: "TurkeyCaller", ap_pass: "gobble123", device_name: "Turkey Caller" };
-const st = { bt: "connected", speaker: "Level Box Slim", playing: false, current: "", loop: false, volume: 60 };
+const st = { bt: "connected", speaker: "Level Box Slim", playing: false, current: "", loop: false, volume: 70 };
 let playStart = 0, playTimer = null, scanning = false, devices = [];
 const boot = Date.now();
 

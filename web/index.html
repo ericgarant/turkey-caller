@@ -223,7 +223,7 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>"&#"+c.charCodeAt(0)+";");
 const fmtS=ms=>ms?(ms/1000).toFixed(1)+" s":"";
 const fmtKB=b=>Math.round(b/1024)+" KB";
 let st={bt:"",speaker:"",playing:false,current:"",volume:null,loop:false},sounds=[],devices=[];
-let stAt=0,lastOk=Date.now(),ws=null,wsOk=false,restarting=0,scanUntil=0,volSentAt=0,volTimer=null;
+let stAt=0,lastOk=Date.now(),ws=null,wsOk=false,restarting=0,scanUntil=0,volSentAt=0,volTimer=null,loopSynced=false;
 
 function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,3000)}
 
@@ -250,6 +250,7 @@ const why=e=>{const m=e.message||"";
 function onStatus(s){
   if(!s||typeof s!=="object")return;
   if(s.bt&&!BT_TEXT[s.bt])s.bt=/connect/i.test(s.bt)&&!/not|dis/i.test(s.bt)?"connected":/search|scan/i.test(s.bt)?"searching":"idle";
+  if(!loopSynced&&s.playing!=null){loopSynced=true;if(s.playing)$("loopSw").checked=!!s.loop}  // reload during a repeat
   st=Object.assign(st,s);stAt=Date.now();lastOk=Date.now();
   if(restarting&&Date.now()-restarting>4000){restarting=0;loadSounds();loadConfig()}
   $("offline").hidden=true;
@@ -464,7 +465,8 @@ function dawn(on){document.body.classList.toggle("dawn",on);$("dawnBtn").setAttr
   document.querySelector('meta[name=theme-color]').content=on?"#070302":"#11140e";try{localStorage.dawn=on?"1":""}catch(_){}}
 $("dawnBtn").onclick=()=>dawn(!document.body.classList.contains("dawn"));
 try{if(localStorage.dawn)dawn(true)}catch(_){}
-$("loopSw").onchange=e=>{st.loop=e.target.checked};
+$("loopSw").onchange=e=>{try{localStorage.loop=e.target.checked?"1":""}catch(_){}};
+try{$("loopSw").checked=!!localStorage.loop}catch(_){}
 
 // One request at a time while loading: each open connection costs the board memory.
 // Status comes from the socket's first push; poll() falls back to GET /api/status after 3 s.

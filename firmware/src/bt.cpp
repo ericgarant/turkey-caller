@@ -126,6 +126,7 @@ void onState(esp_a2d_connection_state_t state, void *) {
     connectedMs = millis() | 1;
   } else if (state == ESP_A2D_CONNECTION_STATE_DISCONNECTED) {
     connectedMs = 0;
+    player::stop();  // a repeating call ends; nothing plays by itself after a reconnect
   }
   // The radio preference itself is set in loop(), which also watches for phones.
 }
