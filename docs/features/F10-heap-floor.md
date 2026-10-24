@@ -21,5 +21,5 @@ Two events are driven by the other device rather than our code, and get their ow
 
 ## Acceptance
 
-- B9 and B16 pass with `minHeap` at or above 40960 and `underruns` unchanged during the run.
-- The architect or reviewer rejects a PR that lowers `minHeap` below the floor, whatever else it adds.
+- B9 and B16 pass with free heap at or above 40960 outside the transient events (rule 1), the transient rule met inside them, and `underruns` unchanged during the run.
+- The architect or reviewer rejects a PR that lowers the heap below the floor, whatever else it adds.
