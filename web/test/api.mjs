@@ -80,14 +80,14 @@ try {
   });
   await step("upload and delete are refused while playing (409)", async () => {
     await post("/api/play", { id: "assembly_yelp", loop: "1" });
-    assert.equal((await upload("x.mp3", 4000)).code, 409);
+    assert.equal((await upload("x.wav", 4000)).code, 409);
     assert.equal((await post("/api/sounds/delete", { id: "cluck" })).code, 409);
     await post("/api/stop");
   }, { risky: true });
   await step("upload rules: bad name 400, too big 413, ok then delete, unknown delete 404", async () => {
-    assert.equal((await upload("Bad Name.mp3", 4000)).code, 400);
-    assert.equal((await upload("big.mp3", 2 * 1024 * 1024)).code, 413);
-    assert.equal((await upload("owl_hoot.mp3", 4000)).code, 200);
+    assert.equal((await upload("Bad Name.wav", 4000)).code, 400);
+    assert.equal((await upload("big.wav", 2 * 1024 * 1024)).code, 413);
+    assert.equal((await upload("owl_hoot.wav", 4000)).code, 200);
     assert.equal((await get("/api/sounds")).length, 13);
     assert.equal((await post("/api/sounds/delete", { id: "owl_hoot" })).code, 200);
     assert.equal((await post("/api/sounds/delete", { id: "owl_hoot" })).code, 404);

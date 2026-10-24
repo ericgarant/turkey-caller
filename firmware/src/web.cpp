@@ -3,31 +3,36 @@
 #include <Arduino.h>
 #include <DNSServer.h>
 #include <ESPAsyncWebServer.h>
-#include <LittleFS.h>
 #include <WiFi.h>
 
 #include "bt.h"
-#include "page.h"
+#include "library.h"
 #include "player.h"
+#include "version.h"
+#include "web_page.h"
 
 namespace web {
 namespace {
 
 constexpr const char *kApName = "TurkeyCaller";
-constexpr const char *kApPassword = "gobble123";  // Phase 0 only; becomes configurable in Phase 2
+constexpr const char *kApPassword = "gobble123";  // becomes a setting with F05
 constexpr int kApChannel = 6;
 constexpr int kMaxClients = 2;
+constexpr size_t kMaxSockets = 3;            // two phones plus one stale socket being replaced
+constexpr uint32_t kPushPlayingMs = 2000;    // status push while a call plays
+constexpr uint32_t kPushIdleMs = 10000;      // status push otherwise
 
 AsyncWebServer server(80);
+AsyncWebSocket ws("/ws");
 DNSServer dns;
 
 volatile bool speakerPending = false;
-size_t fsFree = 0;  // computed once: usedBytes() walks the filesystem under the lock the player reads with
 char pendingSpeaker[33] = "";
+char etag[12] = "";  // hash of the built-in page, so a reflashed page is fetched again
 
 // Escapes a string for a JSON value (speaker names are user-controlled).
-String jsonStr(const char *s) {
-  String out = "\"";
+void jsonStr(String &out, const char *s) {
+  out += '"';
   for (; *s; s++) {
     char c = *s;
     if (c == '"' || c == '\\') {
@@ -41,7 +46,7 @@ String jsonStr(const char *s) {
       out += c;
     }
   }
-  return out + "\"";
+  out += '"';
 }
 
 String param(AsyncWebServerRequest *req, const char *name) {
@@ -53,7 +58,10 @@ String param(AsyncWebServerRequest *req, const char *name) {
 void sendOk(AsyncWebServerRequest *req) { req->send(200, "application/json", "{\"ok\":true}"); }
 
 void sendError(AsyncWebServerRequest *req, int code, const char *msg) {
-  req->send(code, "application/json", String("{\"ok\":false,\"error\":") + jsonStr(msg) + "}");
+  String j = "{\"ok\":false,\"error\":";
+  jsonStr(j, msg);
+  j += "}";
+  req->send(code, "application/json", j);
 }
 
 // With the heap nearly gone, a failed allocation inside the web server aborts the whole
@@ -65,67 +73,89 @@ bool lowMemory(AsyncWebServerRequest *req) {
   return true;
 }
 
-void handleStatus(AsyncWebServerRequest *req) {
-  if (lowMemory(req)) return;
+// The page knows four states; "disconnecting" is brief and on the way to a reconnect.
+const char *btState() {
+  const char *s = bt::state();
+  return strcmp(s, "disconnecting") == 0 ? "connecting" : s;
+}
+
+String statusJson() {
   player::Stats p = player::stats();
   String j;
-  j.reserve(400);
-  j += "{\"bt\":" + jsonStr(bt::state());
-  j += ",\"speaker\":" + jsonStr(bt::speakerName().c_str());
+  j.reserve(420);
+  j += "{\"bt\":\"";
+  j += btState();
+  j += "\",\"speaker\":";
+  jsonStr(j, bt::speakerName().c_str());
   j += ",\"playing\":";
   j += p.playing ? "true" : "false";
-  j += ",\"current\":" + jsonStr(p.current);
+  j += ",\"current\":";
+  jsonStr(j, p.current);
+  j += ",\"loop\":";
+  j += p.playing && p.loop ? "true" : "false";
+  j += ",\"pos_ms\":" + String(p.posMs);
+  j += ",\"len_ms\":" + String(p.lenMs);
   j += ",\"volume\":" + String(p.volume);
-  j += ",\"plays\":" + String(p.plays);
-  j += ",\"underruns\":" + String(p.underruns);
-  j += ",\"buffered\":" + String(p.bufferedBytes);
-  j += ",\"bufferSize\":" + String(p.bufferSize);
   j += ",\"heap\":" + String(ESP.getFreeHeap());
   j += ",\"minHeap\":" + String(ESP.getMinFreeHeap());
   j += ",\"maxBlock\":" + String(ESP.getMaxAllocHeap());
-  j += ",\"fsFree\":" + String(fsFree);
-  j += ",\"fills\":" + String(p.fills);
-  j += ",\"stalls\":" + String(p.stalls);
+  j += ",\"fsFree\":" + String(library::fsFree());
+  j += ",\"fsTotal\":" + String(library::fsTotal());
   j += ",\"clients\":" + String(WiFi.softAPgetStationNum());
   j += ",\"uptime\":" + String(millis() / 1000);
-  j += "}";
-  req->send(200, "application/json", j);
+  j += ",\"plays\":" + String(p.plays);
+  j += ",\"underruns\":" + String(p.underruns);
+  j += ",\"stalls\":" + String(p.stalls);
+  j += ",\"version\":\"" FW_VERSION "\"}";
+  return j;
+}
+
+void handleStatus(AsyncWebServerRequest *req) {
+  if (lowMemory(req)) return;
+  req->send(200, "application/json", statusJson());
 }
 
 void handleSounds(AsyncWebServerRequest *req) {
   if (lowMemory(req)) return;
-  String j = "[";
-  File dir = LittleFS.open("/sounds");
-  bool first = true;
-  if (dir && dir.isDirectory()) {
-    for (File f = dir.openNextFile(); f; f = dir.openNextFile()) {
-      String name = f.name();
-      if (!name.endsWith(".wav")) continue;
-      name.remove(name.length() - 4);
-      if (!first) j += ",";
-      j += jsonStr(name.c_str());
-      first = false;
-    }
+  String j;
+  j.reserve(library::count() * 90 + 2);
+  j += '[';
+  library::Sound s;
+  for (size_t i = 0; library::get(i, s); i++) {
+    if (i) j += ',';
+    j += "{\"id\":\"";
+    j += s.id;  // validated a-z0-9_
+    j += "\",\"name\":";
+    jsonStr(j, s.name);
+    j += ",\"group\":\"";
+    j += s.group;
+    j += "\",\"bytes\":" + String(s.bytes) + ",\"ms\":" + String(s.ms) + "}";
   }
-  j += "]";
+  j += ']';
   req->send(200, "application/json", j);
 }
 
+bool truthy(const String &v) { return v == "1" || v == "true"; }
+
 void handlePlay(AsyncWebServerRequest *req) {
+  String id = param(req, "id");
+  if (!library::has(id.c_str())) return sendError(req, 400, "unknown sound");
   if (!bt::connected()) {
     Serial.println("tap refused: speaker not connected");
-    return sendError(req, 409, "speaker not connected");
+    return sendError(req, 409, "No speaker connected");
   }
-  String id = param(req, "id");
-  if (!player::play(id.c_str())) return sendError(req, 400, "bad sound id");
-  Serial.printf("tap %s\n", id.c_str());
+  bool loop = truthy(param(req, "loop"));
+  if (!player::play(id.c_str(), loop)) return sendError(req, 400, "unknown sound");
+  Serial.printf("tap %s%s\n", id.c_str(), loop ? " (repeat)" : "");
   sendOk(req);
 }
+
+void setVolume(long level) { player::setVolume((uint8_t)constrain(level, 0, 100)); }
 
 void handleVolume(AsyncWebServerRequest *req) {
   String level = param(req, "level");
   if (level.isEmpty()) return sendError(req, 400, "missing level");
-  player::setVolume((uint8_t)constrain(level.toInt(), 0, 100));
+  setVolume(level.toInt());
   sendOk(req);
 }
 
@@ -133,30 +163,150 @@ void handleDevices(AsyncWebServerRequest *req) {
   if (lowMemory(req)) return;
   bt::Device list[12];
   size_t n = bt::devices(list, 12);
-  String j = "[";
+  String j;
+  j.reserve(40 + n * 80);
+  j += "{\"scanning\":";
+  j += strcmp(bt::state(), "searching") == 0 ? "true" : "false";
+  j += ",\"devices\":[";
   for (size_t i = 0; i < n; i++) {
-    if (i) j += ",";
-    j += "{\"name\":" + jsonStr(list[i].name) + ",\"addr\":" + jsonStr(list[i].addr) +
-         ",\"rssi\":" + String(list[i].rssi) + "}";
+    if (i) j += ',';
+    j += "{\"name\":";
+    jsonStr(j, list[i].name);
+    j += ",\"addr\":";
+    jsonStr(j, list[i].addr);
+    j += ",\"rssi\":" + String(list[i].rssi) + "}";
   }
-  j += "]";
+  j += "]}";
   req->send(200, "application/json", j);
 }
 
 void handleConnect(AsyncWebServerRequest *req) {
+  // `addr` is accepted for the page's sake; connecting by address comes with F06. Until then
+  // the board saves the name, restarts and finds the speaker by name.
   String name = param(req, "name");
   if (name.isEmpty()) return sendError(req, 400, "missing name (use /api/bt/forget to clear)");
   if (name.length() >= sizeof(pendingSpeaker)) return sendError(req, 400, "name too long");
   strlcpy(pendingSpeaker, name.c_str(), sizeof(pendingSpeaker));
-  Serial.printf("connect requested: \"%s\"\n", pendingSpeaker);
-  speakerPending = true;  // reboot happens in loop(), after this reply is sent
+  Serial.printf("connect requested: \"%s\" %s\n", pendingSpeaker, param(req, "addr").c_str());
+  speakerPending = true;  // restart happens in loop(), after this reply is sent
   sendOk(req);
+}
+
+void notYet(AsyncWebServerRequest *req) { sendError(req, 501, "not available in this firmware yet"); }
+
+// ---- WebSocket ----
+
+volatile bool pushNow = false;  // something changed: push status on the next loop()
+
+// Commands from the page: {"cmd":"volume","level":N}, also {"cmd":"stop"}.
+void onCommand(const char *msg) {
+  if (strstr(msg, "\"cmd\":\"volume\"")) {
+    const char *l = strstr(msg, "\"level\":");
+    if (l) {
+      setVolume(atol(l + 8));
+      pushNow = true;
+    }
+  } else if (strstr(msg, "\"cmd\":\"stop\"")) {
+    player::stop();
+    pushNow = true;
+  }
+}
+
+void onWsEvent(AsyncWebSocket *, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data,
+               size_t len) {
+  if (type == WS_EVT_CONNECT) {
+    if (ws.count() > kMaxSockets) {
+      Serial.println("ws: too many sockets, refusing one");
+      client->close();
+      return;
+    }
+    pushNow = true;  // the new page wants status straight away
+  } else if (type == WS_EVT_DATA) {
+    AwsFrameInfo *info = (AwsFrameInfo *)arg;
+    // Commands are tiny: take only whole single-frame text messages.
+    if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT && len < 96) {
+      char msg[96];
+      memcpy(msg, data, len);
+      msg[len] = 0;
+      onCommand(msg);
+    }
+  }
+}
+
+// What the page shows prominently; a change here is pushed at once.
+struct Shown {
+  char bt[16];
+  char current[32];
+  bool playing, loop;
+  uint8_t volume;
+  int clients;
+  size_t speakerLen;
+  bool operator!=(const Shown &o) const {
+    return strcmp(bt, o.bt) || strcmp(current, o.current) || playing != o.playing || loop != o.loop ||
+           volume != o.volume || clients != o.clients || speakerLen != o.speakerLen;
+  }
+};
+
+Shown shownNow() {
+  player::Stats p = player::stats();
+  Shown s{};
+  strlcpy(s.bt, btState(), sizeof(s.bt));
+  strlcpy(s.current, p.current, sizeof(s.current));
+  s.playing = p.playing;
+  s.loop = p.loop;
+  s.volume = p.volume;
+  s.clients = WiFi.softAPgetStationNum();
+  s.speakerLen = bt::speakerName().length();
+  return s;
+}
+
+void pushLoop() {
+  static uint32_t lastCheck = 0, lastPush = 0, lastCleanup = 0;
+  static Shown last{};
+  uint32_t now = millis();
+  if (now - lastCleanup >= 1000) {
+    lastCleanup = now;
+    ws.cleanupClients(kMaxSockets);
+  }
+  if (now - lastCheck < 100) return;
+  lastCheck = now;
+  if (ws.count() == 0) return;
+  Shown s = shownNow();
+  uint32_t every = s.playing ? kPushPlayingMs : kPushIdleMs;
+  if (!pushNow && !(s != last) && now - lastPush < every) return;
+  if (ESP.getMaxAllocHeap() < 6144 || !ws.availableForWriteAll()) return;  // try again shortly
+  pushNow = false;
+  last = s;
+  lastPush = now;
+  ws.textAll(statusJson());
+}
+
+// FNV-1a over the gzipped page.
+void makeEtag() {
+  uint32_t h = 2166136261u;
+  for (size_t i = 0; i < kWebPageGzLen; i++) h = (h ^ kWebPageGz[i]) * 16777619u;
+  snprintf(etag, sizeof(etag), "\"%08x\"", (unsigned)h);
+}
+
+void handlePage(AsyncWebServerRequest *req) {
+  if (lowMemory(req)) return;
+  if (req->hasHeader("If-None-Match") && req->header("If-None-Match") == etag) {
+    AsyncWebServerResponse *res = req->beginResponse(304);
+    res->addHeader("ETag", etag);
+    res->addHeader("Cache-Control", "no-cache");
+    return req->send(res);
+  }
+  AsyncWebServerResponse *res = req->beginResponse(200, "text/html", kWebPageGz, kWebPageGzLen);
+  res->addHeader("Content-Encoding", "gzip");
+  res->addHeader("Cache-Control", "no-cache");  // revalidate each load, so a reflashed page shows up
+  res->addHeader("ETag", etag);
+  req->send(res);
 }
 
 }  // namespace
 
 void begin() {
-  fsFree = LittleFS.totalBytes() - LittleFS.usedBytes();  // Phase 2: recompute after upload/delete
+  makeEtag();
   // Log phones joining and leaving, with the reason, to diagnose "Connection failed" on a phone.
   WiFi.onEvent([](arduino_event_id_t event, arduino_event_info_t info) {
     if (event == ARDUINO_EVENT_WIFI_AP_STACONNECTED) {
@@ -177,15 +327,15 @@ void begin() {
   Serial.printf("Wi-Fi AP \"%s\" %s, channel %d, ip %s, captive DNS %s\n", kApName,
                 apOk ? "up" : "FAILED", WiFi.channel(), ip.toString().c_str(), dnsOk ? "up" : "FAILED");
 
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
-    if (lowMemory(req)) return;
-    AsyncWebServerResponse *res = req->beginResponse(200, "text/html", kPageGz, sizeof(kPageGz));
-    res->addHeader("Content-Encoding", "gzip");
-    res->addHeader("Cache-Control", "no-store");  // phones must not keep an old page after a flash
-    req->send(res);
-  });
+  ws.onEvent(onWsEvent);
+  server.addHandler(&ws);
+  server.on("/", HTTP_GET, handlePage);
   server.on("/api/status", HTTP_GET, handleStatus);
+  // on() also matches sub-paths and the first match wins, so /api/sounds/delete goes first.
+  server.on("/api/sounds/delete", HTTP_POST, notYet);  // F03
   server.on("/api/sounds", HTTP_GET, handleSounds);
+  server.on("/api/sounds", HTTP_POST, notYet);         // upload: F03
+  server.on("/api/config", HTTP_ANY, notYet);          // F05
   server.on("/api/play", HTTP_POST, handlePlay);
   server.on("/api/stop", HTTP_POST, [](AsyncWebServerRequest *req) {
     player::stop();
@@ -195,12 +345,14 @@ void begin() {
   server.on("/api/bt/devices", HTTP_GET, handleDevices);
   server.on("/api/bt/scan", HTTP_POST, [](AsyncWebServerRequest *req) {
     Serial.println("search requested");
+    player::stop();  // searching takes the radio; a call would stutter
     bt::requestSearch();
     sendOk(req);
   });
   server.on("/api/bt/connect", HTTP_POST, handleConnect);
   server.on("/api/bt/forget", HTTP_POST, [](AsyncWebServerRequest *req) {
     Serial.println("forget requested");
+    player::stop();
     pendingSpeaker[0] = 0;
     speakerPending = true;
     sendOk(req);
@@ -211,13 +363,15 @@ void begin() {
     req->redirect("http://" + WiFi.softAPIP().toString() + "/");
   });
   server.begin();
-  Serial.println("HTTP server started on port 80");
+  Serial.printf("HTTP server started on port 80, page %u bytes gzipped, firmware %s\n", (unsigned)kWebPageGzLen,
+                FW_VERSION);
 }
 
 int clients() { return WiFi.softAPgetStationNum(); }
 
 void loop() {
   dns.processNextRequest();
+  pushLoop();
   if (speakerPending) {
     delay(200);  // let the HTTP reply go out
     bt::chooseSpeaker(pendingSpeaker);

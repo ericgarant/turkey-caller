@@ -162,8 +162,8 @@ nav button[aria-current="page"]{color:var(--accent)}
           <ul class="list" id="sndList"></ul>
           <div class="field" style="margin-top:10px">
             <label for="upFile">Add a sound</label>
-            <input type="file" id="upFile" accept=".mp3,audio/mpeg">
-            <span class="sub" id="upNote">Mono MP3, 44.1 kHz, 64 kbps. The file name becomes the button name. Not possible while a call is playing.</span>
+            <input type="file" id="upFile" accept=".wav,audio/wav">
+            <span class="sub" id="upNote">Mono WAV, IMA ADPCM, 22.05 kHz (made by tools/audio). The file name becomes the button name. Not possible while a call is playing.</span>
           </div>
         </div>
       </div>
@@ -375,7 +375,7 @@ forget.onclick=async()=>{
 
 // ---- Settings: sounds ----
 function renderSounds(){
-  $("sndList").innerHTML=sounds.map(s=>`<li><div class="grow"><div class="nm">${esc(s.name)}</div><div class="sub mono">${esc(s.id)}.mp3${s.ms?" · "+fmtS(s.ms):""}${s.bytes?" · "+fmtKB(s.bytes):""}</div></div><button class="btn danger" type="button" data-del="${esc(s.id)}">Delete</button></li>`).join("");
+  $("sndList").innerHTML=sounds.map(s=>`<li><div class="grow"><div class="nm">${esc(s.name)}</div><div class="sub mono">${esc(s.id)}.wav${s.ms?" · "+fmtS(s.ms):""}${s.bytes?" · "+fmtKB(s.bytes):""}</div></div><button class="btn danger" type="button" data-del="${esc(s.id)}">Delete</button></li>`).join("");
   $("sndList").querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{
     if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Tap to confirm";setTimeout(()=>{if(b.isConnected){delete b.dataset.armed;b.textContent="Delete"}},3000);return}
     b.disabled=true;
@@ -386,8 +386,8 @@ function renderSounds(){
 const UP_NOTE=$("upNote").innerHTML;
 $("upFile").onchange=e=>{
   const f=e.target.files[0];e.target.value="";if(!f)return;
-  const id=f.name.replace(/\.mp3$/i,"").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"").slice(0,24);
-  if(!/\.mp3$/i.test(f.name)||!id){toast("Pick an .mp3 file");return}
+  const id=f.name.replace(/\.wav$/i,"").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"").slice(0,24);
+  if(!/\.wav$/i.test(f.name)||!id){toast("Pick a .wav file");return}
   const old=sounds.find(s=>s.id===id);
   if(!old)return upload(f,id);
   // Same name as an existing sound: ask before replacing it
@@ -399,10 +399,10 @@ $("upFile").onchange=e=>{
 function upload(f,id,freed){
   if(st.playing){toast("Stop the call first, then add the sound");return}
   if(st.fsFree!=null&&f.size>st.fsFree+(freed||0)-8192){toast(`Not enough room: ${fmtKB(f.size)} needed, ${fmtKB(st.fsFree)} free`);return}
-  const fd=new FormData();fd.append("file",f,id+".mp3");
+  const fd=new FormData();fd.append("file",f,id+".wav");
   const x=new XMLHttpRequest(),note=$("upNote");
   x.open("POST","/api/sounds");
-  x.upload.onprogress=p=>{if(p.lengthComputable)note.textContent=`Uploading ${id}.mp3… ${Math.round(p.loaded/p.total*100)}%`};
+  x.upload.onprogress=p=>{if(p.lengthComputable)note.textContent=`Uploading ${id}.wav… ${Math.round(p.loaded/p.total*100)}%`};
   x.onload=()=>{note.innerHTML=UP_NOTE;
     if(x.status<300){toast((freed?"Replaced ":"Added ")+id);loadSounds()}
     else toast(x.status===409?"Stop the call first, then add the sound":x.status===413?"Not enough room on the caller":"Upload failed ("+x.status+")")};

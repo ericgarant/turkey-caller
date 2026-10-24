@@ -1,9 +1,11 @@
-// Turkey Caller, Phase 0: prove Wi-Fi softAP + web page + Bluetooth A2DP playback together.
+// Turkey Caller: Wi-Fi softAP + control page + Bluetooth A2DP playback of turkey calls.
 #include <Arduino.h>
 #include <LittleFS.h>
 
 #include "bt.h"
+#include "library.h"
 #include "player.h"
+#include "version.h"
 #include "web.h"
 
 // loop() only runs small housekeeping; the default 8 KB stack wastes RAM we need for audio.
@@ -16,12 +18,13 @@ static void heapLog(const char *stage) {
 void setup() {
   Serial.begin(115200);
   delay(200);
-  Serial.println("\nTurkey Caller Phase 0");
+  Serial.println("\nTurkey Caller " FW_VERSION);
 
   // true = format if the partition is blank, so the page still works before `uploadfs`.
   if (!LittleFS.begin(true)) Serial.println("LittleFS mount failed");
   Serial.printf("LittleFS: %u of %u bytes used\n", (unsigned)LittleFS.usedBytes(), (unsigned)LittleFS.totalBytes());
 
+  library::begin();  // sound list from /sounds/index.json and the clip headers
   heapLog("boot");
   player::begin();
   heapLog("player");

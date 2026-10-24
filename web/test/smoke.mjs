@@ -68,7 +68,7 @@ try {
     assert.equal(await page.inputValue("#apSsid"), "TurkeyCaller");
   });
   await step("upload adds a sound, delete removes it", async () => {
-    await page.setInputFiles("#upFile", { name: "Owl Hoot.mp3", mimeType: "audio/mpeg", buffer: Buffer.alloc(16000, 1) });
+    await page.setInputFiles("#upFile", { name: "Owl Hoot.wav", mimeType: "audio/wav", buffer: Buffer.alloc(16000, 1) });
     await page.waitForFunction(() => document.querySelectorAll("#sndList li").length === 13);
     assert.ok(await page.isVisible('[data-del="owl_hoot"]'));
     await page.click('[data-del="owl_hoot"]');
@@ -76,11 +76,11 @@ try {
     await page.waitForFunction(() => document.querySelectorAll("#sndList li").length === 12);
   });
   await step("uploading over an existing sound asks first", async () => {
-    await page.setInputFiles("#upFile", { name: "Cluck.mp3", mimeType: "audio/mpeg", buffer: Buffer.alloc(9000, 1) });
+    await page.setInputFiles("#upFile", { name: "Cluck.wav", mimeType: "audio/wav", buffer: Buffer.alloc(9000, 1) });
     await page.waitForSelector("#upYes");
     await page.click("#upNo");
     assert.equal(await page.isVisible("#upYes"), false);
-    await page.setInputFiles("#upFile", { name: "Cluck.mp3", mimeType: "audio/mpeg", buffer: Buffer.alloc(9000, 1) });
+    await page.setInputFiles("#upFile", { name: "Cluck.wav", mimeType: "audio/wav", buffer: Buffer.alloc(9000, 1) });
     await page.click("#upYes");
     await page.waitForFunction(() => /Replaced cluck/.test(document.getElementById("toast").textContent));
     assert.equal(await page.locator("#sndList li").count(), 12);

@@ -4,6 +4,8 @@
 #include <Preferences.h>
 #include <freertos/queue.h>
 
+#include "wav.h"
+
 namespace player {
 namespace {
 
@@ -67,6 +69,7 @@ class Ring {
 
 struct Command {
   bool stop;
+  bool loop;
   char id[32];
 };
 
@@ -92,14 +95,16 @@ volatile uint32_t underruns = 0;
 volatile uint32_t fills = 0;       // A2DP data callbacks so far
 volatile bool stalled = false;     // the speaker stopped taking audio mid-clip
 volatile uint32_t stalls = 0;
+volatile bool looping = false;     // the current clip repeats (written by the decode task)
+volatile uint32_t lenMs = 0;       // length of the current clip
+volatile uint32_t servedFrames = 0;  // callback-only writer: 44.1 kHz frames of the current clip sent
 // Clips are WAV files: IMA ADPCM (what tools/audio produces, 4 bits a sample, no decoder
 // memory) or plain 16-bit PCM, mono, any sample rate up to 44.1 kHz. The Helix MP3 decoder
 // needed ~30 KB of heap, which with Wi-Fi and a connected speaker left the Bluetooth stack
 // too little to keep streaming.
 struct Clip {
-  bool adpcm = false;
-  uint32_t rate = 0;
-  uint16_t blockAlign = 0;   // ADPCM: bytes per block (4-byte header + nibbles)
+  wav::Info info;
+  bool loop = false;         // start again at the end until stopped or replaced
   uint32_t dataLeft = 0;     // bytes of the data chunk not read yet
   // resampler to 44.1 kHz (linear interpolation)
   uint32_t step = 0;         // input samples per output sample, Q16
@@ -202,62 +207,35 @@ void decodeAdpcmBlock(const uint8_t *b, size_t len) {
 }
 
 uint16_t rd16(const uint8_t *p) { return p[0] | (p[1] << 8); }
-uint32_t rd32(const uint8_t *p) { return p[0] | (p[1] << 8) | (p[2] << 16) | ((uint32_t)p[3] << 24); }
 
 // Reads the WAV header up to the data chunk. Returns false (and logs) on a file we can't play.
 bool openWav(const char *path) {
-  uint8_t h[12];
-  if (file.read(h, 12) != 12 || memcmp(h, "RIFF", 4) || memcmp(h + 8, "WAVE", 4)) {
-    log_e("%s is not a WAV file", path);
-    return false;
-  }
   clip = Clip();
-  bool haveFmt = false;
-  uint16_t channels = 0, bits = 0, format = 0;
-  for (;;) {
-    uint8_t c[8];
-    if (file.read(c, 8) != 8) break;
-    uint32_t size = rd32(c + 4);
-    if (!memcmp(c, "fmt ", 4) && size >= 16) {
-      uint8_t f[16];
-      if (file.read(f, 16) != 16) break;
-      format = rd16(f);
-      channels = rd16(f + 2);
-      clip.rate = rd32(f + 4);
-      clip.blockAlign = rd16(f + 12);
-      bits = rd16(f + 14);
-      file.seek(file.position() + size - 16 + (size & 1));
-      haveFmt = true;
-    } else if (!memcmp(c, "data", 4)) {
-      clip.dataLeft = size;
-      break;
-    } else {
-      file.seek(file.position() + size + (size & 1));
-    }
-  }
-  clip.adpcm = format == 0x11;
-  bool ok = haveFmt && clip.dataLeft > 0 && channels == 1 && clip.rate >= 8000 && clip.rate <= kSampleRate &&
-            ((clip.adpcm && bits == 4 && clip.blockAlign > 4 && clip.blockAlign <= kReadChunk * 2) ||
-             (format == 1 && bits == 16));
-  if (!ok) {
-    log_e("%s: need mono IMA ADPCM or 16-bit PCM WAV at 8-44.1 kHz (format %u, %u ch, %u bits, %u Hz)", path,
-          format, channels, bits, (unsigned)clip.rate);
+  const char *why = "";
+  if (!wav::read(file, clip.info, &why)) {
+    Serial.printf("can't play %s: %s\n", path, why);
     return false;
   }
-  clip.step = (uint32_t)(((uint64_t)clip.rate << 16) / kSampleRate);
+  clip.dataLeft = clip.info.dataBytes;
+  clip.step = (uint32_t)(((uint64_t)clip.info.rate << 16) / kSampleRate);
   return true;
 }
 
 // Decodes the next piece of the clip. Returns false at the end of the data.
 bool decodeSome() {
-  static uint8_t buf[kReadChunk * 2];  // one ADPCM block (ffmpeg writes 1024-byte blocks)
-  if (clip.dataLeft == 0) return false;
-  size_t want = clip.adpcm ? clip.blockAlign : kReadChunk;
+  static uint8_t buf[wav::kMaxBlock];  // one ADPCM block (ffmpeg writes 1024-byte blocks)
+  if (clip.dataLeft == 0) {
+    if (!clip.loop) return false;
+    // Repeat: back to the first block. The resampler keeps its state, so the join is seamless.
+    file.seek(clip.info.dataStart);
+    clip.dataLeft = clip.info.dataBytes;
+  }
+  size_t want = clip.info.adpcm ? clip.info.blockAlign : kReadChunk;
   if (want > clip.dataLeft) want = clip.dataLeft;
   size_t n = file.read(buf, want);
   if (n == 0) return false;
   clip.dataLeft -= n;
-  if (clip.adpcm) {
+  if (clip.info.adpcm) {
     decodeAdpcmBlock(buf, n);
   } else {
     for (size_t i = 0; i + 1 < n; i += 2) pushSample((int16_t)rd16(buf + i));
@@ -273,12 +251,13 @@ void closeCurrent() {
   aborting = false;
   decodeDone = true;
   ring.reset();
+  looping = false;
   portENTER_CRITICAL(&lock);
   current[0] = 0;
   portEXIT_CRITICAL(&lock);
 }
 
-void startClip(const char *id) {
+void startClip(const char *id, bool loop) {
   char path[48];
   snprintf(path, sizeof(path), "/sounds/%s.wav", id);
   file = LittleFS.open(path, "r");
@@ -290,6 +269,9 @@ void startClip(const char *id) {
     file.close();
     return;
   }
+  clip.loop = loop;
+  looping = loop;
+  lenMs = clip.info.ms();
   portENTER_CRITICAL(&lock);
   strlcpy(current, id, sizeof(current));
   portEXIT_CRITICAL(&lock);
@@ -310,7 +292,7 @@ void task(void *) {
     bool got = xQueueReceive(commands, &cmd, wait) == pdTRUE;
     if (got) {
       closeCurrent();
-      if (!cmd.stop) startClip(cmd.id);
+      if (!cmd.stop) startClip(cmd.id, cmd.loop);
       continue;
     }
     if (!file) {
@@ -353,10 +335,11 @@ void begin() {
   xTaskCreatePinnedToCore(task, "player", 4096, nullptr, 5, nullptr, 1);
 }
 
-bool play(const char *id) {
+bool play(const char *id, bool loop) {
   if (!id || !*id || strlen(id) >= sizeof(Command::id) || strchr(id, '/') || strchr(id, '.')) return false;
   Command cmd{};
   cmd.stop = false;
+  cmd.loop = loop;
   strlcpy(cmd.id, id, sizeof(cmd.id));
   xQueueOverwrite(commands, &cmd);
   return true;
@@ -400,6 +383,11 @@ Stats stats() {
   s.bufferedBytes = ring.available();
   s.bufferSize = kRingBytes;
   s.fills = fills;
+  s.loop = s.playing && looping;
+  s.lenMs = s.playing ? lenMs : 0;
+  uint32_t pos = s.playing ? (uint32_t)((uint64_t)servedFrames * 1000 / kSampleRate) : 0;
+  if (s.loop && s.lenMs) pos %= s.lenMs;
+  s.posMs = pos;
   s.stalls = stalls;
   return s;
 }
@@ -431,6 +419,7 @@ int32_t fillFrames(Frame *frames, int32_t count) {
       if (servedGen != g) {
         servedGen = g;
         fadeIn = 0;
+        servedFrames = 0;
       }
       for (size_t i = 0; i < got; i++) {
         int32_t s = ((int32_t)mono[i] * gain) >> 15;
@@ -440,6 +429,7 @@ int32_t fillFrames(Frame *frames, int32_t count) {
         last = (int16_t)s;
       }
       done += got;
+      servedFrames = servedFrames + got;
     }
     if (done < count && g == gen) {
       if (decodeDone) {

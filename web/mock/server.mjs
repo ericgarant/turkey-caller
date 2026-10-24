@@ -142,8 +142,8 @@ const server = http.createServer(async (req, res) => {
       return ok(res);
     case "POST /api/sounds": {
       if (st.playing) return fail(res, 409, "stop playback first");
-      const m = /filename="([a-z0-9_]{1,24})\.mp3"/.exec(raw.toString("latin1"));
-      if (!m) return fail(res, 400, "file must be name.mp3 with a-z, 0-9 and _");
+      const m = /filename="([a-z0-9_]{1,24})\.wav"/.exec(raw.toString("latin1"));
+      if (!m) return fail(res, 400, "file must be name.wav with a-z, 0-9 and _");
       if (raw.length > status().fsFree) return fail(res, 413, "not enough room");
       const ms = Math.round(raw.length / BYTES_PER_MS);
       const old = sounds.find((x) => x.id === m[1]);

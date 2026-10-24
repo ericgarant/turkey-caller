@@ -1,0 +1,14 @@
+[
+  {"id": "tree_call", "name": "Tree call", "group": "soft"},
+  {"id": "cluck", "name": "Cluck", "group": "soft"},
+  {"id": "purr", "name": "Purr", "group": "soft"},
+  {"id": "cluck_purr", "name": "Cluck & purr", "group": "soft"},
+  {"id": "whine", "name": "Whine", "group": "soft"},
+  {"id": "plain_yelp", "name": "Plain yelp", "group": "loud"},
+  {"id": "assembly_yelp", "name": "Assembly yelp", "group": "loud"},
+  {"id": "cutting", "name": "Cutting", "group": "loud"},
+  {"id": "fly_down_cackle", "name": "Fly-down cackle", "group": "loud"},
+  {"id": "kee_kee_run", "name": "Kee-kee run", "group": "loud"},
+  {"id": "gobble", "name": "Gobble", "group": "care"},
+  {"id": "putt", "name": "Putt", "group": "care"}
+]
