@@ -18,5 +18,5 @@
 2. All 12 calls are listed with names and groups; the three screens work against the real board.
 3. `node web/test/api.mjs http://192.168.4.1` reports no mismatches (the `bt` string differences listed in the QA plan are gone).
 4. After `pio run -t upload` (not `uploadfs`) with a changed page, the new page shows after a reload and all sounds are still there (B15).
-5. The app binary stays under its size budget (F09) and lowest heap stays at or above 40 KB (F10) with the page open on two phones.
+5. The app binary stays under its size budget (`docs/architecture.md`, Storage row) and lowest heap stays at or above 40 KB (F10) with the page open on two phones.
 6. Pull the page out of the build (delete `web_page.h`) and the build regenerates it, or fails with a clear message.

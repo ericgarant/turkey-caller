@@ -8,7 +8,7 @@
 - **Use:** `POST /api/bt/connect {addr, name}` saves the speaker **address** (and name for display), connects without restarting if it can; if a restart is needed the page shows "Restarting" and reconnects. A speaker with an empty name is selectable by address.
 - **Forget:** `POST /api/bt/forget` disconnects, clears the saved speaker, goes to `idle`, and stops playback. A second search can start immediately.
 - **Auto-reconnect:** with a saved speaker the board keeps trying: at boot, after the speaker is switched off and on, and after it comes back in range. Retry cadence backs off (every 3 s for the first minute, then every 10 s) so Wi-Fi stays responsive. No tap is needed and nothing plays by itself on reconnect.
-- **No speaker:** play returns 409 with "No speaker connected"; the page disables calls and says why. Volume, settings and upload still work.
+- **No speaker:** play returns 409 with "No speaker connected"; the page disables calls and says why. Volume and settings still work.
 - A stale saved speaker (switched off for days) never blocks the page or the Wi-Fi.
 
 ## Acceptance criteria

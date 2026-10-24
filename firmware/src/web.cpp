@@ -33,7 +33,7 @@ DNSServer dns;
 
 volatile bool speakerPending = false;
 char pendingSpeaker[33] = "";
-char etag[12] = "";
+char etag[12] = "";                 // hash of the built-in page, sent as ETag so phones revalidate after a reflash
 volatile bool repeatOn = false;      // the Repeat switch, shared by every page (off after a restart)
 volatile int inFlight = 0;           // HTTP requests being served (AsyncTCP task; reset by loop())
 volatile uint32_t lastRequestMs = 0;  // last time a request was admitted or finished (watchdog for a stuck inFlight)
