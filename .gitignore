@@ -14,6 +14,8 @@ firmware/src/page.h
 firmware/managed_components/
 firmware/dependencies.lock
 firmware/sdkconfig.*
+firmware/.dummy/
+firmware/CMakeLists.txt
 .vscode/
 
 # OS / editors
