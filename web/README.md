@@ -39,7 +39,7 @@ Agreed with the firmware thread; the summary table is in `../docs/architecture.m
 | `POST /api/bt/connect` `addr`, `name` | Firmware connects by `addr`, shows `name`; `name` must not be empty. It may restart; the page shows "Restarting" and reconnects |
 | `POST /api/bt/forget` | |
 | `GET /api/config` → `ap_ssid`, `device_name`; `POST /api/config` adds `ap_pass` | Password is never returned; empty means unchanged. Saving restarts the board |
-| `POST /api/sounds` multipart `file` | The page renames the file to `a-z0-9_` (max 24 chars) + `.mp3`. 409 while playing, 413 when full |
+| `POST /api/sounds` multipart `file` | The page renames the file to `a-z0-9_` (max 24 chars) + `.wav`. 409 while playing, 413 when full |
 | `POST /api/sounds/delete` `id` | 409 while playing |
 | `WS /ws` | Board pushes the `/api/status` JSON on change, every 2 s while playing, else every 10 s. The page sends `{"cmd":"volume","level":N}` over it; play and stop go over HTTP so errors come back as status codes. Without the socket the page polls `/api/status` every 3 s |
 

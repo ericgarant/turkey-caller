@@ -35,4 +35,4 @@ Sources and licenses are listed in `tools/audio/SOURCES.md`.
 
 ## Status
 
-Phase 0 (prove Bluetooth audio + Wi-Fi together on the board) firmware is in `firmware/`, waiting for its on-board test. Flash and test steps: [firmware/README.md](firmware/README.md).
+Firmware is in `firmware/`: Phase 0 (Bluetooth audio + Wi-Fi together) passed on the board, and the next-phase features in `docs/features/` are being built. Flash and test steps: [firmware/README.md](firmware/README.md).
