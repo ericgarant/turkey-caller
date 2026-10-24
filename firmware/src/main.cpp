@@ -45,8 +45,8 @@ void loop() {
     last = millis();
     player::Stats p = player::stats();
     static uint32_t lastFills = 0;
-    Serial.printf("[%lus] clients=%d bt=%s playing=%s plays=%u underruns=%u buf=%u fills=+%u heap=%u min=%u block=%u\n",
-                  (unsigned long)(millis() / 1000), web::clients(), bt::state(), p.playing ? p.current : "-",
+    Serial.printf("[%lus] clients=%d req=%d bt=%s playing=%s plays=%u underruns=%u buf=%u fills=+%u heap=%u min=%u block=%u\n",
+                  (unsigned long)(millis() / 1000), web::clients(), web::requestsInFlight(), bt::state(), p.playing ? p.current : "-",
                   (unsigned)p.plays, (unsigned)p.underruns, (unsigned)p.bufferedBytes,
                   (unsigned)(p.fills - lastFills), (unsigned)ESP.getFreeHeap(),
                   (unsigned)ESP.getMinFreeHeap(), (unsigned)ESP.getMaxAllocHeap());

@@ -32,7 +32,9 @@ DNSServer dns;
 
 volatile bool speakerPending = false;
 char pendingSpeaker[33] = "";
-char etag[12] = "";  // hash of the built-in page, so a reflashed page is fetched again
+char etag[12] = "";
+volatile int inFlight = 0;           // HTTP requests being served (AsyncTCP task; reset by loop())
+volatile uint32_t lastRequestMs = 0;  // hash of the built-in page, so a reflashed page is fetched again
 
 // Escapes a string for a JSON value (speaker names are user-controlled).
 void jsonStr(String &out, const char *s) {
@@ -336,17 +338,19 @@ void begin() {
   server.addHandler(&ws);
   // Cap requests in flight. The socket is left out: its connection is handed over to the
   // WebSocket, so the request's disconnect callback would never run.
+  // The count relies on each request's single onDisconnect slot: other code must not set
+  // onDisconnect on an HTTP request (or must call inFlight-- itself). loop() resets a stuck count.
   server.addMiddleware([](AsyncWebServerRequest *req, ArMiddlewareNext next) {
-    static int inFlight = 0;  // only touched on the AsyncTCP task
     if (req->url() == "/ws") return next();
+    lastRequestMs = millis();
     if (inFlight >= kMaxRequests) {
       Serial.printf("503 %s: busy\n", req->url().c_str());
       AsyncWebServerResponse *res = req->beginResponse(503, "application/json", "{\"ok\":false,\"error\":\"busy\"}");
       res->addHeader("Retry-After", "1");
       return req->send(res);
     }
-    inFlight++;
-    req->onDisconnect([] { inFlight--; });
+    inFlight = inFlight + 1;
+    req->onDisconnect([] { inFlight = inFlight - 1; });
     next();
   });
   // No icon: without this the browser's /favicon.ico would be redirected and fetch the page again.
@@ -391,8 +395,16 @@ void begin() {
 
 int clients() { return WiFi.softAPgetStationNum(); }
 
+int requestsInFlight() { return inFlight; }
+
 void loop() {
   dns.processNextRequest();
+  // Insurance: no request lasts 10 s (the page is 10 KB, the server times out idle ones), so a
+  // count left over after that is a leak; without this the board would answer 503 until reboot.
+  if (inFlight != 0 && millis() - lastRequestMs > 10000) {
+    Serial.printf("request count stuck at %d, reset\n", (int)inFlight);
+    inFlight = 0;
+  }
   pushLoop();
   if (speakerPending) {
     delay(200);  // let the HTTP reply go out
