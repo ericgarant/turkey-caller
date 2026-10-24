@@ -36,7 +36,7 @@ char pendingSpeaker[33] = "";
 char etag[12] = "";
 volatile bool repeatOn = false;      // the Repeat switch, shared by every page (off after a restart)
 volatile int inFlight = 0;           // HTTP requests being served (AsyncTCP task; reset by loop())
-volatile uint32_t lastRequestMs = 0;  // hash of the built-in page, so a reflashed page is fetched again
+volatile uint32_t lastRequestMs = 0;  // last time a request was admitted or finished (watchdog for a stuck inFlight)
 
 // Escapes a string for a JSON value (speaker names are user-controlled).
 void jsonStr(String &out, const char *s) {
@@ -373,7 +373,6 @@ void begin() {
   // onDisconnect on an HTTP request (or must call inFlight-- itself). loop() resets a stuck count.
   server.addMiddleware([](AsyncWebServerRequest *req, ArMiddlewareNext next) {
     if (req->url() == "/ws") return next();
-    lastRequestMs = millis();
     // While the speaker connects and starts its stream (a few seconds, ~35 KB of heap), only
     // play and stop are served; page loads and the rest get 503 and the page retries.
     const String &u = req->url();
@@ -384,8 +383,14 @@ void begin() {
       res->addHeader("Retry-After", "1");
       return req->send(res);
     }
+    // Only admitted requests move the watchdog's clock: a 503 must not, or a page that keeps
+    // retrying would hold off the reset of a leaked count forever.
+    lastRequestMs = millis();
     inFlight = inFlight + 1;
-    req->onDisconnect([] { inFlight = inFlight - 1; });
+    req->onDisconnect([] {
+      if (inFlight > 0) inFlight = inFlight - 1;  // after a watchdog reset, a late disconnect must not go below 0
+      lastRequestMs = millis();
+    });
     next();
   });
   // No icon: without this the browser's /favicon.ico would be redirected and fetch the page again.

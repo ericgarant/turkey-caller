@@ -14,7 +14,7 @@ A requirement on every feature, because Wi-Fi, Bluetooth and the web server shar
 
 ## Transient events
 
-Two events are driven by the other device rather than our code, and get their own rule instead of the 40 KB floor: no crash or reset, no audio drop if a clip is playing, and the largest free block stays at least 16 KB. Each has its own row in the measurements on issue #8.
+Two events are driven by the other device rather than our code, and get their own rule instead of the 40 KB floor: no crash or reset, no audio drop if a clip is playing, and the largest free block stays at least 16 KB. Each has its own row in the measurements on issue #8. Eric approved this rule on 24 Oct 2026, for now; it is up for review later.
 
 - **Speaker reconnect:** from "speaker Connecting" until the stream has started (at most 5 s). Page loads and API calls other than play and stop get 503 meanwhile, and status pushes pause.
 - **Phone joining the Wi-Fi:** the second or so after the phone gets its address, when it fires its first DNS lookups, connectivity checks and connections. Test it with a second phone joining while a call repeats.
