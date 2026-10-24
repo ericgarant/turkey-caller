@@ -62,6 +62,6 @@ Parameters are form fields or query strings; replies are JSON.
 
 ## Known limits of Phase 0
 
-- Bluetooth searching takes most of the shared radio, enough that phones can fail to join the Wi-Fi. So with no speaker saved, the ESP32 only searches after you tap **Search for speakers**, and it favours Wi-Fi while searching. With a saved speaker that is switched off, it keeps trying to reconnect, so turn the speaker on first.
+- Bluetooth searching takes most of the shared radio, enough that phones can fail to join the Wi-Fi. So with no speaker saved, the ESP32 only searches after you tap **Search for speakers**, and it favours Wi-Fi while searching. Each search is one round of about 25 s (10 s setup, then ~13 s of inquiry), and the page can be slow or briefly unreachable during it; found speakers stay listed afterwards. Every device seen is printed on serial as a `saw …` line. With a saved speaker that is switched off, it keeps trying to reconnect, so turn the speaker on first.
 - Clips must be 44.1 kHz (the A2DP rate). Other rates play at the wrong speed; the serial log warns once.
 - The Wi-Fi name and password are fixed in `src/web.cpp`; they become settings in Phase 2.

@@ -79,16 +79,16 @@ async function loadSounds() {
   }
 }
 
+let scanAt = 0;  // when "Search" was tapped: the page is slow for ~25 s while the ESP32 searches
+
 async function loadDevices(st) {
-  if (st.bt === 'connected') { $('devs').innerHTML = ''; return; }
-  if (st.bt === 'idle') {
-    $('devs').innerHTML = '<div class="row"><span style="color:var(--dim)">Put the speaker in pairing mode, then:</span><button class="small" id="scan">Search for speakers</button></div>';
-    $('scan').onclick = () => post('/api/bt/scan').then(() => say('Searching…')).catch(e => say(e.message));
-    return;
-  }
-  const list = await (await fetch('/api/bt/devices')).json();
   const box = $('devs');
-  box.innerHTML = list.length ? '' : '<div class="row" style="color:var(--dim)">Searching… turn the speaker on and put it in pairing mode.</div>';
+  if (st.bt === 'connected') { box.innerHTML = ''; return; }
+  const list = await (await fetch('/api/bt/devices')).json();
+  box.innerHTML = '';
+  if (st.bt === 'searching') {
+    box.innerHTML = '<div class="row" style="color:var(--dim)">Searching (about 25 s, the page may be slow)…</div>';
+  }
   for (const d of list) {
     const row = document.createElement('div');
     row.className = 'row';
@@ -100,15 +100,22 @@ async function loadDevices(st) {
       b.className = 'small';
       b.textContent = 'Use';
       b.onclick = async () => {
-        try { await post('/api/bt/connect', {name: d.name}); say('Saved, the ESP32 is restarting…'); } catch (e) { say(e.message); }
+        try { await post('/api/bt/connect', {name: d.name}); say('Saved, the ESP32 is restarting and will connect…'); } catch (e) { say(e.message); }
       };
       row.append(b);
     }
     box.appendChild(row);
   }
+  if (st.bt === 'idle') {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = '<span style="color:var(--dim)">' + (list.length ? 'Not listed? ' : '') +
+      'Put the speaker in pairing mode, then:</span><button class="small" id="scan">Search for speakers</button>';
+    box.appendChild(row);
+    $('scan').onclick = () => { scanAt = Date.now(); post('/api/bt/scan').then(() => say('Searching…')).catch(e => say(e.message)); };
+  }
 }
 
-const kb = n => (n / 1024).toFixed(1) + ' KB';
 async function refresh() {
   try {
     const st = await (await fetch('/api/status')).json();
@@ -126,7 +133,9 @@ async function refresh() {
       ['Wi-Fi clients', st.clients], ['Uptime', st.uptime + ' s']];
     $('stats').innerHTML = rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('');
     loadDevices(st);
-  } catch (e) { $('bt').textContent = 'ESP32 not reachable'; }
+  } catch (e) {
+    $('bt').textContent = Date.now() - scanAt < 40000 ? 'searching (page slow while searching)' : 'ESP32 not reachable';
+  }
 }
 
 $('stop').onclick = () => post('/api/stop').catch(e => say(e.message));

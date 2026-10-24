@@ -11,13 +11,71 @@ namespace bt {
 namespace {
 
 constexpr size_t kMaxDevices = 12;
+// After a2dp.start() the library waits 10 s (connectable) before its first inquiry.
+constexpr uint32_t kStartupMs = 11000;
 
-BluetoothA2DPSource a2dp;
+bool onFound(const char *name, esp_bd_addr_t addr, int rssi);
+
+// Logs every device the search sees, and also accepts speakers that send their name as a
+// plain name property instead of in the extended inquiry data (the library skips those).
+class Source : public BluetoothA2DPSource {
+ public:
+  // The library restarts the search forever when it finds nothing. With this set it runs one
+  // round (~13 s) and stops, so Wi-Fi gets the radio back.
+  void searchOnce() { is_end = true; }
+  // Another round after a search ended without a match (runs on the caller's task; the GAP
+  // API only queues the request for the Bluetooth task).
+  void searchAgain() {
+    is_end = true;
+    s_a2d_state = APP_AV_STATE_DISCOVERING;
+    esp_bt_gap_start_discovery(ESP_BT_INQ_MODE_GENERAL_INQUIRY, kInquiryLen, 0);
+  }
+  static constexpr int kInquiryLen = 10;  // units of 1.28 s
+
+ protected:
+  void filter_inquiry_scan_result(esp_bt_gap_cb_param_t *param) override {
+    uint32_t cod = 0;
+    int rssi = -129;
+    uint8_t *eir = nullptr;
+    char name[ESP_BT_GAP_MAX_BDNAME_LEN + 1] = "";
+    for (int i = 0; i < param->disc_res.num_prop; i++) {
+      esp_bt_gap_dev_prop_t *p = param->disc_res.prop + i;
+      if (p->type == ESP_BT_GAP_DEV_PROP_COD) cod = *(uint32_t *)p->val;
+      else if (p->type == ESP_BT_GAP_DEV_PROP_RSSI) rssi = *(int8_t *)p->val;
+      else if (p->type == ESP_BT_GAP_DEV_PROP_EIR) eir = (uint8_t *)p->val;
+      else if (p->type == ESP_BT_GAP_DEV_PROP_BDNAME) {
+        int n = min<int>(p->len, ESP_BT_GAP_MAX_BDNAME_LEN);
+        memcpy(name, p->val, n);
+        name[n] = 0;
+      }
+    }
+    uint8_t *a = param->disc_res.bda;
+    bool audio = esp_bt_gap_is_valid_cod(cod) && is_valid_cod_service(cod);
+    Serial.printf("saw %02x:%02x:%02x:%02x:%02x:%02x cod=0x%06x rssi=%d %s eir=%s name=\"%s\"\n", a[0], a[1],
+                  a[2], a[3], a[4], a[5], (unsigned)cod, rssi, audio ? "audio" : "not-audio", eir ? "yes" : "no",
+                  name);
+    if (eir || !audio || !name[0]) {
+      BluetoothA2DPSource::filter_inquiry_scan_result(param);
+      return;
+    }
+    // Name without EIR: same steps the library takes for a match.
+    if (onFound(name, param->disc_res.bda, rssi)) {
+      s_a2d_state = APP_AV_STATE_DISCOVERED;
+      memcpy(peer_bd_addr, param->disc_res.bda, ESP_BD_ADDR_LEN);
+      set_last_connection(peer_bd_addr);
+      esp_bt_gap_cancel_discovery();
+    }
+  }
+};
+
+Source a2dp;
 String speaker;  // saved speaker name, set once at boot
 portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
 Device seen[kMaxDevices];
 size_t seenCount = 0;
-bool started = false;               // A2DP stack started (it searches until it connects)
+bool started = false;               // A2DP stack started
+uint32_t startedMs = 0;
+volatile bool discovering = false;  // an inquiry is running
 volatile bool searchRequested = false;
 
 void remember(const char *name, esp_bd_addr_t a, int rssi) {
@@ -39,7 +97,7 @@ void remember(const char *name, esp_bd_addr_t a, int rssi) {
 bool onFound(const char *name, esp_bd_addr_t addr, int rssi) {
   remember(name, addr, rssi);
   bool match = speaker.length() > 0 && speaker.equalsIgnoreCase(name);
-  log_i("found speaker \"%s\" rssi %d%s", name, rssi, match ? " -> connecting" : "");
+  Serial.printf("found speaker \"%s\" rssi %d%s\n", name, rssi, match ? " -> connecting" : "");
   return match;
 }
 
@@ -50,11 +108,18 @@ void onState(esp_a2d_connection_state_t state, void *) {
                                                                        : ESP_COEX_PREFER_WIFI);
 }
 
+void onDiscovery(esp_bt_gap_discovery_state_t st) {
+  discovering = st == ESP_BT_GAP_DISCOVERY_STARTED;
+  Serial.printf("speaker search %s\n", discovering ? "started" : "ended");
+}
+
 void startStack() {
   if (started) return;
   started = true;
+  startedMs = millis();
   esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
   a2dp.start();
+  a2dp.searchOnce();
   Serial.printf("Bluetooth started, saved speaker: \"%s\"\n", speaker.c_str());
 }
 
@@ -73,6 +138,7 @@ void begin() {
   a2dp.set_local_name("TurkeyCaller");
   a2dp.set_ssid_callback(onFound);
   a2dp.set_on_connection_state_changed(onState);
+  a2dp.set_discovery_mode_callback(onDiscovery);
   a2dp.set_data_callback_in_frames(player::fillFrames);
   // Reconnect straight to the last speaker's address; search by name only when there is none.
   a2dp.set_auto_reconnect(speaker.length() > 0);
@@ -85,9 +151,13 @@ void begin() {
 void requestSearch() { searchRequested = true; }
 
 void loop() {
-  if (searchRequested) {
-    searchRequested = false;
+  if (!searchRequested) return;
+  searchRequested = false;
+  if (!started) {
     startStack();
+  } else if (!discovering && !a2dp.is_connected() && millis() - startedMs > kStartupMs) {
+    Serial.println("searching again");
+    a2dp.searchAgain();
   }
 }
 
@@ -98,7 +168,9 @@ const char *state() {
     case ESP_A2D_CONNECTION_STATE_CONNECTED: return "connected";
     case ESP_A2D_CONNECTION_STATE_CONNECTING: return "connecting";
     case ESP_A2D_CONNECTION_STATE_DISCONNECTING: return "disconnecting";
-    default: return started ? "searching" : "idle";
+    default:
+      if (started && (discovering || millis() - startedMs < kStartupMs)) return "searching";
+      return "idle";
   }
 }
 

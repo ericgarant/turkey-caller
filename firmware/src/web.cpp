@@ -129,6 +129,7 @@ void handleConnect(AsyncWebServerRequest *req) {
   if (name.isEmpty()) return sendError(req, 400, "missing name (use /api/bt/forget to clear)");
   if (name.length() >= sizeof(pendingSpeaker)) return sendError(req, 400, "name too long");
   strlcpy(pendingSpeaker, name.c_str(), sizeof(pendingSpeaker));
+  Serial.printf("connect requested: \"%s\"\n", pendingSpeaker);
   speakerPending = true;  // reboot happens in loop(), after this reply is sent
   sendOk(req);
 }
