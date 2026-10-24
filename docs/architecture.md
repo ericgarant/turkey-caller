@@ -52,7 +52,7 @@ One 2.4 GHz radio is time-shared between Wi-Fi and BT Classic.
 ## Phases
 
 0. **Prove the risky part** (ESP32 coder, QA): softAP + page + A2DP playing a call. Done when there are no dropouts during 50 rapid taps, free heap stays above 40 KB, and the app binary with all libraries linked fits its budget. Phase 0 measured 1.75 MB against the original 2 MB app partition, so the app partition was grown to 2.5 MB (LittleFS 1.375 MB; the clips need ~0.83 MB as ADPCM).
-1. **Specs and sounds** (feature writer, architect): user stories, final catalog, audio manifest.
+1. **Specs and sounds** (feature writer, architect): user stories, final catalog, audio manifest. Specs for the next phase are in `docs/features/`.
 2. **Firmware core** (ESP32 coder): modules and API, native unit tests.
 3. **Web app** (web designer/coder): build against the mock, then the board.
 4. **Test and field trial** (QA): CI, Playwright against the mock, on-device checklist and 2-hour soak.
