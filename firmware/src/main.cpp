@@ -6,6 +6,10 @@
 #include "player.h"
 #include "web.h"
 
+static void heapLog(const char *stage) {
+  Serial.printf("heap after %-10s free=%u block=%u\n", stage, (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
+}
+
 void setup() {
   Serial.begin(115200);
   delay(200);
@@ -15,9 +19,13 @@ void setup() {
   if (!LittleFS.begin(true)) Serial.println("LittleFS mount failed");
   Serial.printf("LittleFS: %u of %u bytes used\n", (unsigned)LittleFS.usedBytes(), (unsigned)LittleFS.totalBytes());
 
+  heapLog("boot");
   player::begin();
+  heapLog("player");
   bt::begin();   // Bluetooth first, so it gets its memory before Wi-Fi takes its share
+  heapLog("bluetooth");
   web::begin();
+  heapLog("wifi+web");
   Serial.printf("Ready. Join Wi-Fi \"TurkeyCaller\" (password gobble123), open http://192.168.4.1\n");
 }
 

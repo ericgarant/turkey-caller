@@ -30,10 +30,10 @@ The board is plugged into the Mac by USB.
    pio run -t upload
    pio run -t uploadfs
    ```
-   The first build downloads the toolchain and takes a few minutes. The build prints `App binary: … of the 2.25 MB budget`.
+   The first build downloads the toolchain and ESP-IDF, then recompiles the ESP-IDF libraries with the trimmed Bluetooth/Wi-Fi settings in `custom_sdkconfig`. That takes 10 minutes or more, once. The build prints `App binary: … of the 2.25 MB budget`.
 4. Watch the serial log: `pio device monitor` (Ctrl+C to quit). Every 5 s it prints Bluetooth state, plays, underruns and free heap.
 
-If upload can't find the board, list ports with `pio device list` and pass one, for example `pio run -t upload --upload-port /dev/cu.usbserial-110`. The Freenove board uses a CH340 USB chip; recent macOS has the driver built in. If it says "Failed to connect", hold the BOOT button while the upload starts.
+Uploads run at 460800 baud because 921600 fails on this board's CH340 chip under macOS. If upload can't find the board, list ports with `pio device list` and pass one, for example `pio run -t upload --upload-port /dev/cu.usbserial-110`. The Freenove board uses a CH340 USB chip; recent macOS has the driver built in. If it says "Failed to connect", hold the BOOT button while the upload starts.
 
 ## Connect the speaker and test
 

@@ -154,7 +154,11 @@ void startClip(const char *id) {
     log_e("cannot open %s", path);
     return;
   }
-  mp3.begin();
+  if (!mp3.begin()) {
+    log_e("no memory for the MP3 decoder (free heap %u)", (unsigned)ESP.getFreeHeap());
+    file.close();
+    return;
+  }
   portENTER_CRITICAL(&lock);
   strlcpy(current, id, sizeof(current));
   portEXIT_CRITICAL(&lock);
