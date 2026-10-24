@@ -157,6 +157,7 @@ void handlePlay(AsyncWebServerRequest *req) {
   String loopParam = param(req, "loop");
   bool loop = loopParam.isEmpty() ? (bool)repeatOn : truthy(loopParam);
   repeatOn = loop;  // a play with loop= also sets the shared switch
+  bt::notePlay();
   if (!player::play(id.c_str(), loop)) return sendError(req, 400, "unknown sound");
   Serial.printf("tap %s%s\n", id.c_str(), loop ? " (repeat)" : "");
   sendOk(req);

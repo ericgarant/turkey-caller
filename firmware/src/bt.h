@@ -15,6 +15,7 @@ bool connected();
 bool busy();                   // the speaker is connecting or starting its stream: heap is tight for a few seconds
 const char *state();           // "idle" (not searching), "searching" (one ~25 s round per request), "connecting", "connected", "disconnecting"
 void requestSearch();          // start looking for speakers (from any task)
+void notePlay();               // a call is about to play: share the radio with the speaker now (any task)
 void loop();                   // call from loop(): starts a requested search
 String speakerName();          // saved speaker name ("" = none yet)
 size_t devices(Device *out, size_t max);  // speakers seen while searching

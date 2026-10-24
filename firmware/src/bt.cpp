@@ -108,6 +108,7 @@ bool onFound(const char *name, esp_bd_addr_t addr, int rssi) {
   return match;
 }
 
+volatile uint32_t tapMs = 0;  // set by notePlay() (web task), taken by loop()
 esp_coex_prefer_t coexNow = ESP_COEX_PREFER_BALANCE;
 bool coexSet = false;
 
@@ -189,16 +190,21 @@ void begin() {
 
 void requestSearch() { searchRequested = true; }
 
+void notePlay() { tapMs = millis() | 1; }
+
 void loop() {
-  // Wi-Fi gets the radio unless a speaker is connected AND a phone is on the access point.
-  // A connected speaker streams continuously (silence too), and under BALANCE phones failed to
-  // join ("Connection failed"). With nobody joined there is nothing to play, so Wi-Fi first;
-  // once a phone has joined, share the radio so the audio stays smooth.
-  static uint32_t lastCoexCheck = 0;
-  if (millis() - lastCoexCheck >= 500) {
-    lastCoexCheck = millis();
-    setCoex(a2dp.is_connected() && WiFi.softAPgetStationNum() > 0 ? ESP_COEX_PREFER_BALANCE
-                                                                   : ESP_COEX_PREFER_WIFI);
+  // Wi-Fi gets the radio except while a call plays (and 2 s after, so back-to-back taps don't
+  // flip it). A connected speaker streams silence all the time, and sharing the radio then cost
+  // phones their join ("Connection failed" under BALANCE) and ~30 KB of heap when the first one
+  // joined. A tap switches at once (notePlay), before the audio ring has filled.
+  static uint32_t lastCoexCheck = 0, lastActive = 0;
+  uint32_t now = millis(), tap = tapMs;
+  if (tap || now - lastCoexCheck >= 100) {
+    lastCoexCheck = now;
+    if (tap) tapMs = 0;
+    if (tap || player::stats().playing) lastActive = now | 1;
+    bool active = lastActive && now - lastActive < 2000;
+    setCoex(a2dp.is_connected() && active ? ESP_COEX_PREFER_BALANCE : ESP_COEX_PREFER_WIFI);
   }
   // Sometimes the stream never starts after a connect, and the first tap would be lost to the
   // stall check. Ask for it every 3 s until the speaker reports the audio started.
