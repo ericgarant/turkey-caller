@@ -67,23 +67,9 @@ try {
     assert.match(await page.textContent("#fsText"), /used of 1408 KB/);
     assert.equal(await page.inputValue("#apSsid"), "TurkeyCaller");
   });
-  await step("upload adds a sound, delete removes it", async () => {
-    await page.setInputFiles("#upFile", { name: "Owl Hoot.wav", mimeType: "audio/wav", buffer: Buffer.alloc(16000, 1) });
-    await page.waitForFunction(() => document.querySelectorAll("#sndList li").length === 13);
-    assert.ok(await page.isVisible('[data-del="owl_hoot"]'));
-    await page.click('[data-del="owl_hoot"]');
-    await page.click('[data-del="owl_hoot"]');
-    await page.waitForFunction(() => document.querySelectorAll("#sndList li").length === 12);
-  });
-  await step("uploading over an existing sound asks first", async () => {
-    await page.setInputFiles("#upFile", { name: "Cluck.wav", mimeType: "audio/wav", buffer: Buffer.alloc(9000, 1) });
-    await page.waitForSelector("#upYes");
-    await page.click("#upNo");
-    assert.equal(await page.isVisible("#upYes"), false);
-    await page.setInputFiles("#upFile", { name: "Cluck.wav", mimeType: "audio/wav", buffer: Buffer.alloc(9000, 1) });
-    await page.click("#upYes");
-    await page.waitForFunction(() => /Replaced cluck/.test(document.getElementById("toast").textContent));
-    assert.equal(await page.locator("#sndList li").count(), 12);
+  await step("adding and deleting sounds is hidden for now (F03 deferred)", async () => {
+    assert.equal(await page.isVisible("#upFile"), false);
+    assert.equal(await page.locator("#sndList [data-del]").count(), 0);
   });
   await step("short Wi-Fi password is refused before sending", async () => {
     await page.fill("#apPass", "short");

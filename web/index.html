@@ -161,7 +161,7 @@ nav button[aria-current="page"]{color:var(--accent)}
         <div class="card">
           <div class="meter" aria-hidden="true"><i id="fsBar"></i></div>
           <ul class="list" id="sndList"></ul>
-          <div class="field" style="margin-top:10px">
+          <div class="field" id="upField" style="margin-top:10px" hidden>
             <label for="upFile">Add a sound</label>
             <input type="file" id="upFile" accept=".wav,audio/wav">
             <span class="sub" id="upNote">Mono WAV, IMA ADPCM, 22.05 kHz (made by tools/audio). The file name becomes the button name. Not possible while a call is playing.</span>
@@ -234,8 +234,8 @@ async function api(path,params,method){
   let r;
   for(let i=0;;i++){  // 503 = the board is busy or low on memory: wait and retry
     r=await fetch(path,opt);
-    if(r.status!==503||i>=3)break;
-    await new Promise(ok=>setTimeout(ok,500+i*500));
+    if(r.status!==503||i>=6)break;  // up to ~9 s: covers the board's busy window while a speaker connects
+    await new Promise(ok=>setTimeout(ok,Math.min(500+i*500,2000)));
   }
   let j=null;try{j=await r.json()}catch(_){}
   if(!r.ok)throw new Error((j&&j.error)||("HTTP "+r.status));
@@ -250,6 +250,7 @@ const why=e=>{const m=e.message||"";
 function onStatus(s){
   if(!s||typeof s!=="object")return;
   if(s.bt&&!BT_TEXT[s.bt])s.bt=/connect/i.test(s.bt)&&!/not|dis/i.test(s.bt)?"connected":/search|scan/i.test(s.bt)?"searching":"idle";
+  if(s.repeat!=null)$("loopSw").checked=!!s.repeat;  // Repeat is kept on the board and shared by every phone
   st=Object.assign(st,s);stAt=Date.now();lastOk=Date.now();
   if(restarting&&Date.now()-restarting>4000){restarting=0;loadSounds();loadConfig()}
   $("offline").hidden=true;
@@ -263,12 +264,13 @@ function connectWs(){
   ws.onerror=()=>{try{ws.close()}catch(_){}};
 }
 async function poll(){
-  // While the socket is up the board pushes; a slow poll still catches a silent socket.
-  const gap=wsOk?8000:3000;
+  // While the socket is up the board pushes at least every 10 s, so poll only when a push is
+  // overdue (each extra request costs the board memory, more so with two phones).
+  const gap=wsOk?12500:3000;
   if(Date.now()-lastOk>=gap-200){
     try{onStatus(await api("/api/status"))}catch(_){}
   }
-  if(Date.now()-lastOk>12000){
+  if(Date.now()-lastOk>(wsOk?16000:12000)){
     $("offTitle").textContent=restarting?"Restarting…":"Lost the caller";
     $("offText").textContent=restarting?"Rejoin the caller's Wi-Fi if your phone switched networks. This page reconnects by itself.":"Check that your phone is still on the caller's Wi-Fi. This page reconnects by itself.";
     $("offline").hidden=false;
@@ -380,8 +382,11 @@ forget.onclick=async()=>{
 };
 
 // ---- Settings: sounds ----
+// Adding and deleting sounds from the phone is deferred (F03), so those controls stay hidden.
+const EDIT_SOUNDS=false;
+$("upField").hidden=!EDIT_SOUNDS;
 function renderSounds(){
-  $("sndList").innerHTML=sounds.map(s=>`<li><div class="grow"><div class="nm">${esc(s.name)}</div><div class="sub mono">${esc(s.id)}.wav${s.ms?" · "+fmtS(s.ms):""}${s.bytes?" · "+fmtKB(s.bytes):""}</div></div><button class="btn danger" type="button" data-del="${esc(s.id)}">Delete</button></li>`).join("");
+  $("sndList").innerHTML=sounds.map(s=>`<li><div class="grow"><div class="nm">${esc(s.name)}</div><div class="sub mono">${esc(s.id)}.wav${s.ms?" · "+fmtS(s.ms):""}${s.bytes?" · "+fmtKB(s.bytes):""}</div></div>${EDIT_SOUNDS?`<button class="btn danger" type="button" data-del="${esc(s.id)}">Delete</button>`:""}</li>`).join("");
   $("sndList").querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{
     if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Tap to confirm";setTimeout(()=>{if(b.isConnected){delete b.dataset.armed;b.textContent="Delete"}},3000);return}
     b.disabled=true;
@@ -464,7 +469,8 @@ function dawn(on){document.body.classList.toggle("dawn",on);$("dawnBtn").setAttr
   document.querySelector('meta[name=theme-color]').content=on?"#070302":"#11140e";try{localStorage.dawn=on?"1":""}catch(_){}}
 $("dawnBtn").onclick=()=>dawn(!document.body.classList.contains("dawn"));
 try{if(localStorage.dawn)dawn(true)}catch(_){}
-$("loopSw").onchange=e=>{st.loop=e.target.checked};
+$("loopSw").onchange=e=>{const on=e.target.checked;st.repeat=on;
+  send("repeat","/api/repeat",{on:on?1:0}).catch(err=>{e.target.checked=!on;toast(why(err))})};
 
 // One request at a time while loading: each open connection costs the board memory.
 // Status comes from the socket's first push; poll() falls back to GET /api/status after 3 s.

@@ -1,5 +1,7 @@
 #include "player.h"
 
+#include "heapmon.h"
+
 #include <LittleFS.h>
 #include <Preferences.h>
 #include <freertos/queue.h>
@@ -95,7 +97,7 @@ volatile uint32_t underruns = 0;
 volatile uint32_t fills = 0;       // A2DP data callbacks so far
 volatile bool stalled = false;     // the speaker stopped taking audio mid-clip
 volatile uint32_t stalls = 0;
-volatile bool looping = false;     // the current clip repeats (written by the decode task)
+volatile bool looping = false;     // the current clip repeats (set at start and by setLoop())
 volatile uint32_t lenMs = 0;       // length of the current clip
 volatile uint32_t servedFrames = 0;  // callback-only writer: 44.1 kHz frames of the current clip sent
 // Clips are WAV files: IMA ADPCM (what tools/audio produces, 4 bits a sample, no decoder
@@ -225,7 +227,7 @@ bool openWav(const char *path) {
 bool decodeSome() {
   static uint8_t buf[wav::kMaxBlock];  // one ADPCM block (ffmpeg writes 1024-byte blocks)
   if (clip.dataLeft == 0) {
-    if (!clip.loop) return false;
+    if (!looping) return false;  // Repeat can be switched off mid-call: this pass is the last
     // Repeat: back to the first block. The resampler keeps its state, so the join is seamless.
     file.seek(clip.info.dataStart);
     clip.dataLeft = clip.info.dataBytes;
@@ -283,7 +285,8 @@ void startClip(const char *id, bool loop) {
   decodeDone = false;
   playing = true;
   plays = plays + 1;
-  Serial.printf("play %s heap=%u block=%u\n", id, (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
+  Serial.printf("play %s heap=%u block=%u low=%u\n", id, (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap(),
+                (unsigned)heapmon::lowSince());
 }
 
 void task(void *) {
@@ -348,6 +351,10 @@ bool play(const char *id, bool loop) {
   return true;
 }
 
+void setLoop(bool on) {
+  if (playing) looping = on;
+}
+
 void stop() {
   Command cmd{};
   cmd.stop = true;
@@ -371,6 +378,7 @@ void loop() {
     prefs.begin("player", false);
     prefs.putUChar("volume", volume);
     prefs.end();
+    Serial.printf("volume %u saved\n", (unsigned)volume);
   }
 }
 
@@ -413,8 +421,11 @@ int32_t fillFrames(Frame *frames, int32_t count) {
     if (ring.available() >= kPrimeBytes || decodeDone) primedGen = g;
   }
 
+  // Volume steps ramp over ~6 ms (one Q15 step per sample at most 128), so a change never clicks.
+  static int32_t gain = -1;
+  if (gain < 0) gain = gainQ15;
+  const int32_t target = gainQ15;
   if (active && primedGen == g) {
-    int32_t gain = gainQ15;
     while (done < count) {
       size_t want = min<size_t>(count - done, sizeof(mono) / sizeof(mono[0]));
       size_t got = ring.read((uint8_t *)mono, want * sizeof(int16_t)) / sizeof(int16_t);
@@ -425,6 +436,7 @@ int32_t fillFrames(Frame *frames, int32_t count) {
         servedFrames = 0;
       }
       for (size_t i = 0; i < got; i++) {
+        if (gain != target) gain += constrain(target - gain, -128, 128);
         int32_t s = ((int32_t)mono[i] * gain) >> 15;
         if (fadeIn < kFadeSamples) s = s * fadeIn++ / kFadeSamples;
         frames[done + i].channel1 = (int16_t)s;

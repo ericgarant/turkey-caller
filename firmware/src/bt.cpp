@@ -6,6 +6,7 @@
 #include <esp_coexist.h>
 #include <WiFi.h>
 
+#include "heapmon.h"
 #include "player.h"
 
 namespace bt {
@@ -82,6 +83,7 @@ volatile bool restartAudio = false;  // ask the speaker to resume the stream (se
 uint32_t seenStalls = 0;
 volatile bool audioStarted = false;  // the speaker is taking the audio stream
 volatile uint32_t connectedMs = 0;   // when the speaker last connected (0 = not connected)
+volatile uint32_t connectingMs = 0;  // when a connect attempt started (0 = none running)
 
 void remember(const char *name, esp_bd_addr_t a, int rssi) {
   char addr[18];
@@ -106,6 +108,7 @@ bool onFound(const char *name, esp_bd_addr_t addr, int rssi) {
   return match;
 }
 
+volatile uint32_t tapMs = 0;  // set by notePlay() (web task), taken by loop()
 esp_coex_prefer_t coexNow = ESP_COEX_PREFER_BALANCE;
 bool coexSet = false;
 
@@ -120,12 +123,17 @@ void setCoex(esp_coex_prefer_t p) {
 }
 
 void onState(esp_a2d_connection_state_t state, void *) {
-  Serial.printf("speaker %s\n", a2dp.to_str(state));
-  if (state == ESP_A2D_CONNECTION_STATE_CONNECTED) {
+  Serial.printf("speaker %s heap=%u low=%u\n", a2dp.to_str(state), (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince());
+  if (state == ESP_A2D_CONNECTION_STATE_CONNECTING) {
+    connectingMs = millis() | 1;
+  } else if (state == ESP_A2D_CONNECTION_STATE_CONNECTED) {
     audioStarted = false;
+    connectingMs = 0;
     connectedMs = millis() | 1;
   } else if (state == ESP_A2D_CONNECTION_STATE_DISCONNECTED) {
+    connectingMs = 0;
     connectedMs = 0;
+    player::stop();  // a repeating call ends; nothing plays by itself after a reconnect
   }
   // The radio preference itself is set in loop(), which also watches for phones.
 }
@@ -134,8 +142,9 @@ void onAudio(esp_a2d_audio_state_t state, void *) {
   // Some speakers suspend the stream while staying connected; taps would then play nothing.
   if (state == ESP_A2D_AUDIO_STATE_SUSPEND && a2dp.is_connected()) restartAudio = true;
   audioStarted = state == ESP_A2D_AUDIO_STATE_STARTED;
-  Serial.printf("speaker audio %s\n", state == ESP_A2D_AUDIO_STATE_STARTED ? "started"
-                                        : state == ESP_A2D_AUDIO_STATE_SUSPEND ? "suspended" : "stopped");
+  Serial.printf("speaker audio %s heap=%u low=%u\n", state == ESP_A2D_AUDIO_STATE_STARTED ? "started"
+                                        : state == ESP_A2D_AUDIO_STATE_SUSPEND ? "suspended" : "stopped",
+                (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince());
 }
 
 void onDiscovery(esp_bt_gap_discovery_state_t st) {
@@ -181,16 +190,25 @@ void begin() {
 
 void requestSearch() { searchRequested = true; }
 
+void notePlay() { tapMs = millis() | 1; }
+
 void loop() {
-  // Wi-Fi gets the radio unless a speaker is connected AND a phone is on the access point.
-  // A connected speaker streams continuously (silence too), and under BALANCE phones failed to
-  // join ("Connection failed"). With nobody joined there is nothing to play, so Wi-Fi first;
-  // once a phone has joined, share the radio so the audio stays smooth.
-  static uint32_t lastCoexCheck = 0;
-  if (millis() - lastCoexCheck >= 500) {
-    lastCoexCheck = millis();
-    setCoex(a2dp.is_connected() && WiFi.softAPgetStationNum() > 0 ? ESP_COEX_PREFER_BALANCE
-                                                                   : ESP_COEX_PREFER_WIFI);
+  // Wi-Fi gets the radio except while a call plays (and 2 s after, so back-to-back taps don't
+  // flip it). A connected speaker streams silence all the time, and sharing the radio then cost
+  // phones their join ("Connection failed" under BALANCE) and ~30 KB of heap when the first one
+  // joined. A tap switches at once (notePlay), before the audio ring has filled.
+  static uint32_t lastCoexCheck = 0, lastActive = 0;
+  static bool everActive = false;
+  uint32_t now = millis(), tap = tapMs;
+  if (tap || now - lastCoexCheck >= 100) {
+    lastCoexCheck = now;
+    if (tap) tapMs = 0;
+    if (tap || player::stats().playing) {
+      lastActive = now;  // not now | 1: on an even millis() that is in the future and the hold wraps
+      everActive = true;
+    }
+    bool active = everActive && now - lastActive < 2000;
+    setCoex(a2dp.is_connected() && active ? ESP_COEX_PREFER_BALANCE : ESP_COEX_PREFER_WIFI);
   }
   // Sometimes the stream never starts after a connect, and the first tap would be lost to the
   // stall check. Ask for it every 3 s until the speaker reports the audio started.
@@ -231,6 +249,14 @@ void loop() {
 }
 
 bool connected() { return a2dp.is_connected(); }
+
+bool busy() {
+  // A connect and the stream start take ~35 KB of heap for a few seconds. Capped at 5 s each,
+  // so a speaker that is off (an attempt every 10 s) never keeps the page away for long.
+  uint32_t now = millis(), cing = connectingMs, ced = connectedMs;
+  if (cing && now - cing < 5000) return true;
+  return ced && !audioStarted && now - ced < 5000;
+}
 
 const char *state() {
   switch (a2dp.get_connection_state()) {

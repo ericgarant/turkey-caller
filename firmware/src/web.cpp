@@ -6,6 +6,7 @@
 #include <WiFi.h>
 
 #include "bt.h"
+#include "heapmon.h"
 #include "library.h"
 #include "player.h"
 #include "version.h"
@@ -32,7 +33,10 @@ DNSServer dns;
 
 volatile bool speakerPending = false;
 char pendingSpeaker[33] = "";
-char etag[12] = "";  // hash of the built-in page, so a reflashed page is fetched again
+char etag[12] = "";
+volatile bool repeatOn = false;      // the Repeat switch, shared by every page (off after a restart)
+volatile int inFlight = 0;           // HTTP requests being served (AsyncTCP task; reset by loop())
+volatile uint32_t lastRequestMs = 0;  // last time a request was admitted or finished (watchdog for a stuck inFlight)
 
 // Escapes a string for a JSON value (speaker names are user-controlled).
 void jsonStr(String &out, const char *s) {
@@ -97,11 +101,13 @@ String statusJson() {
   jsonStr(j, p.current);
   j += ",\"loop\":";
   j += p.playing && p.loop ? "true" : "false";
+  j += ",\"repeat\":";
+  j += repeatOn ? "true" : "false";
   j += ",\"pos_ms\":" + String(p.posMs);
   j += ",\"len_ms\":" + String(p.lenMs);
   j += ",\"volume\":" + String(p.volume);
   j += ",\"heap\":" + String(ESP.getFreeHeap());
-  j += ",\"minHeap\":" + String(ESP.getMinFreeHeap());
+  j += ",\"minHeap\":" + String(heapmon::minEver());
   j += ",\"maxBlock\":" + String(ESP.getMaxAllocHeap());
   j += ",\"fsFree\":" + String(library::fsFree());
   j += ",\"fsTotal\":" + String(library::fsTotal());
@@ -148,7 +154,10 @@ void handlePlay(AsyncWebServerRequest *req) {
     Serial.println("tap refused: speaker not connected");
     return sendError(req, 409, "No speaker connected");
   }
-  bool loop = truthy(param(req, "loop"));
+  String loopParam = param(req, "loop");
+  bool loop = loopParam.isEmpty() ? (bool)repeatOn : truthy(loopParam);
+  repeatOn = loop;  // a play with loop= also sets the shared switch
+  bt::notePlay();
   if (!player::play(id.c_str(), loop)) return sendError(req, 400, "unknown sound");
   Serial.printf("tap %s%s\n", id.c_str(), loop ? " (repeat)" : "");
   sendOk(req);
@@ -203,6 +212,15 @@ void notYet(AsyncWebServerRequest *req) { sendError(req, 501, "not available in 
 volatile bool pushNow = false;  // something changed: push status on the next loop()
 
 // Commands from the page: {"cmd":"volume","level":N}, also {"cmd":"stop"}.
+void setRepeat(bool on) {
+  repeatOn = on;
+  player::setLoop(on);
+  Serial.printf("repeat %s heap=%u low=%u\n", on ? "on" : "off", (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince());
+  pushNow = true;
+}
+
+void logStop() { Serial.printf("stop heap=%u low=%u\n", (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince()); }
+
 void onCommand(const char *msg) {
   if (strstr(msg, "\"cmd\":\"volume\"")) {
     const char *l = strstr(msg, "\"level\":");
@@ -211,8 +229,12 @@ void onCommand(const char *msg) {
       pushNow = true;
     }
   } else if (strstr(msg, "\"cmd\":\"stop\"")) {
+    logStop();
     player::stop();
     pushNow = true;
+  } else if (strstr(msg, "\"cmd\":\"repeat\"")) {
+    const char *o = strstr(msg, "\"on\":");
+    if (o) setRepeat(o[5] == 't' || o[5] == '1' || (o[5] == '"' && o[6] == '1'));
   }
 }
 
@@ -224,6 +246,8 @@ void onWsEvent(AsyncWebSocket *, AsyncWebSocketClient *client, AwsEventType type
       client->close();
       return;
     }
+    Serial.printf("ws open #%u (%u sockets) heap=%u low=%u\n", (unsigned)client->id(), (unsigned)ws.count(),
+                  (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince());
     pushNow = true;  // the new page wants status straight away
   } else if (type == WS_EVT_DATA) {
     AwsFrameInfo *info = (AwsFrameInfo *)arg;
@@ -241,12 +265,12 @@ void onWsEvent(AsyncWebSocket *, AsyncWebSocketClient *client, AwsEventType type
 struct Shown {
   char bt[16];
   char current[32];
-  bool playing, loop;
+  bool playing, loop, repeat;
   uint8_t volume;
   int clients;
   size_t speakerLen;
   bool operator!=(const Shown &o) const {
-    return strcmp(bt, o.bt) || strcmp(current, o.current) || playing != o.playing || loop != o.loop ||
+    return strcmp(bt, o.bt) || strcmp(current, o.current) || playing != o.playing || loop != o.loop || repeat != o.repeat ||
            volume != o.volume || clients != o.clients || speakerLen != o.speakerLen;
   }
 };
@@ -259,6 +283,7 @@ Shown shownNow() {
   s.playing = p.playing;
   s.loop = p.loop;
   s.volume = p.volume;
+  s.repeat = repeatOn;
   s.clients = WiFi.softAPgetStationNum();
   s.speakerLen = bt::speakerName().length();
   return s;
@@ -278,11 +303,16 @@ void pushLoop() {
   Shown s = shownNow();
   uint32_t every = s.playing ? kPushPlayingMs : kPushIdleMs;
   if (!pushNow && !(s != last) && now - lastPush < every) return;
-  if (ESP.getMaxAllocHeap() < 6144 || !ws.availableForWriteAll()) return;  // try again shortly
+  if (bt::busy() || ESP.getMaxAllocHeap() < 6144) return;  // try again shortly
   pushNow = false;
   last = s;
   lastPush = now;
-  ws.textAll(statusJson());
+  // Each push is a full snapshot, so a phone that hasn't taken the last one (screen off, weak
+  // signal) gets nothing new: queued snapshots used to pile up, ~0.5 KB each, up to 32 per phone.
+  String j = statusJson();
+  for (auto &c : ws.getClients()) {
+    if (c.status() == WS_CONNECTED && c.queueLen() == 0) c.text(j);
+  }
 }
 
 // FNV-1a over the gzipped page.
@@ -294,7 +324,8 @@ void makeEtag() {
 
 void handlePage(AsyncWebServerRequest *req) {
   if (lowMemory(req)) return;
-  Serial.printf("GET / heap=%u block=%u\n", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
+  Serial.printf("GET / heap=%u block=%u low=%u\n", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap(),
+                (unsigned)heapmon::lowSince());
   if (req->hasHeader("If-None-Match") && req->header("If-None-Match") == etag) {
     AsyncWebServerResponse *res = req->beginResponse(304);
     res->addHeader("ETag", etag);
@@ -316,13 +347,15 @@ void begin() {
   WiFi.onEvent([](arduino_event_id_t event, arduino_event_info_t info) {
     if (event == ARDUINO_EVENT_WIFI_AP_STACONNECTED) {
       const uint8_t *m = info.wifi_ap_staconnected.mac;
-      Serial.printf("phone joined %02x:%02x:%02x:%02x:%02x:%02x\n", m[0], m[1], m[2], m[3], m[4], m[5]);
+      Serial.printf("phone joined %02x:%02x:%02x:%02x:%02x:%02x heap=%u low=%u\n", m[0], m[1], m[2], m[3], m[4], m[5],
+                    (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince());
     } else if (event == ARDUINO_EVENT_WIFI_AP_STADISCONNECTED) {
       const uint8_t *m = info.wifi_ap_stadisconnected.mac;
       Serial.printf("phone left %02x:%02x:%02x:%02x:%02x:%02x reason %u\n", m[0], m[1], m[2], m[3], m[4], m[5],
                     (unsigned)info.wifi_ap_stadisconnected.reason);
     } else if (event == ARDUINO_EVENT_WIFI_AP_STAIPASSIGNED) {
-      Serial.printf("phone got ip %s\n", IPAddress(info.wifi_ap_staipassigned.ip.addr).toString().c_str());
+      Serial.printf("phone got ip %s heap=%u low=%u\n", IPAddress(info.wifi_ap_staipassigned.ip.addr).toString().c_str(),
+                    (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince());
     }
   });
   WiFi.mode(WIFI_AP);
@@ -336,17 +369,28 @@ void begin() {
   server.addHandler(&ws);
   // Cap requests in flight. The socket is left out: its connection is handed over to the
   // WebSocket, so the request's disconnect callback would never run.
+  // The count relies on each request's single onDisconnect slot: other code must not set
+  // onDisconnect on an HTTP request (or must call inFlight-- itself). loop() resets a stuck count.
   server.addMiddleware([](AsyncWebServerRequest *req, ArMiddlewareNext next) {
-    static int inFlight = 0;  // only touched on the AsyncTCP task
     if (req->url() == "/ws") return next();
-    if (inFlight >= kMaxRequests) {
+    // While the speaker connects and starts its stream (a few seconds, ~35 KB of heap), only
+    // play and stop are served; page loads and the rest get 503 and the page retries.
+    const String &u = req->url();
+    bool busy = bt::busy() && u != "/api/play" && u != "/api/stop";
+    if (busy || inFlight >= kMaxRequests) {
       Serial.printf("503 %s: busy\n", req->url().c_str());
       AsyncWebServerResponse *res = req->beginResponse(503, "application/json", "{\"ok\":false,\"error\":\"busy\"}");
       res->addHeader("Retry-After", "1");
       return req->send(res);
     }
-    inFlight++;
-    req->onDisconnect([] { inFlight--; });
+    // Only admitted requests move the watchdog's clock: a 503 must not, or a page that keeps
+    // retrying would hold off the reset of a leaked count forever.
+    lastRequestMs = millis();
+    inFlight = inFlight + 1;
+    req->onDisconnect([] {
+      if (inFlight > 0) inFlight = inFlight - 1;  // after a watchdog reset, a late disconnect must not go below 0
+      lastRequestMs = millis();
+    });
     next();
   });
   // No icon: without this the browser's /favicon.ico would be redirected and fetch the page again.
@@ -360,10 +404,17 @@ void begin() {
   server.on("/api/config", HTTP_ANY, notYet);          // F05
   server.on("/api/play", HTTP_POST, handlePlay);
   server.on("/api/stop", HTTP_POST, [](AsyncWebServerRequest *req) {
+    logStop();
     player::stop();
     sendOk(req);
   });
   server.on("/api/volume", HTTP_POST, handleVolume);
+  server.on("/api/repeat", HTTP_POST, [](AsyncWebServerRequest *req) {
+    String on = param(req, "on");
+    if (on.isEmpty()) return sendError(req, 400, "missing on");
+    setRepeat(truthy(on));
+    sendOk(req);
+  });
   server.on("/api/bt/devices", HTTP_GET, handleDevices);
   server.on("/api/bt/scan", HTTP_POST, [](AsyncWebServerRequest *req) {
     Serial.println("search requested");
@@ -381,6 +432,9 @@ void begin() {
   });
   // Captive portal: phones probe random URLs; send them all to the page.
   server.onNotFound([](AsyncWebServerRequest *req) {
+    // Logged with the heap to see what a phone's join-time probes cost (F10).
+    Serial.printf("probe %s%s heap=%u low=%u\n", req->host().c_str(), req->url().c_str(), (unsigned)ESP.getFreeHeap(),
+                  (unsigned)heapmon::lowSince());
     if (req->url().startsWith("/api/")) return sendError(req, 404, "not found");
     req->redirect("http://" + WiFi.softAPIP().toString() + "/");
   });
@@ -391,8 +445,16 @@ void begin() {
 
 int clients() { return WiFi.softAPgetStationNum(); }
 
+int requestsInFlight() { return inFlight; }
+
 void loop() {
   dns.processNextRequest();
+  // Insurance: no request lasts 10 s (the page is 10 KB, the server times out idle ones), so a
+  // count left over after that is a leak; without this the board would answer 503 until reboot.
+  if (inFlight != 0 && millis() - lastRequestMs > 10000) {
+    Serial.printf("request count stuck at %d, reset\n", (int)inFlight);
+    inFlight = 0;
+  }
   pushLoop();
   if (speakerPending) {
     delay(200);  // let the HTTP reply go out

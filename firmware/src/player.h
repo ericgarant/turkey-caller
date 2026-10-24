@@ -23,6 +23,7 @@ struct Stats {
 void begin();                        // start the decode task (after LittleFS is mounted)
 bool play(const char *id, bool loop = false);  // queue a clip by name ("cluck"); a new play replaces the current one
 void stop();
+void setLoop(bool on);               // change Repeat for the call playing now (next pass)
 void setVolume(uint8_t level);       // 0-100, applies now, saved to NVS later by loop()
 void loop();                         // call from loop(): deferred NVS save
 Stats stats();
