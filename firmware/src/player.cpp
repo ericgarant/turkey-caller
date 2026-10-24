@@ -236,7 +236,7 @@ bool openWav(const char *path) {
   }
   clip.adpcm = format == 0x11;
   bool ok = haveFmt && clip.dataLeft > 0 && channels == 1 && clip.rate >= 8000 && clip.rate <= kSampleRate &&
-            ((clip.adpcm && bits == 4 && clip.blockAlign > 4 && clip.blockAlign <= kReadChunk * 4) ||
+            ((clip.adpcm && bits == 4 && clip.blockAlign > 4 && clip.blockAlign <= kReadChunk * 2) ||
              (format == 1 && bits == 16));
   if (!ok) {
     log_e("%s: need mono IMA ADPCM or 16-bit PCM WAV at 8-44.1 kHz (format %u, %u ch, %u bits, %u Hz)", path,
@@ -249,7 +249,7 @@ bool openWav(const char *path) {
 
 // Decodes the next piece of the clip. Returns false at the end of the data.
 bool decodeSome() {
-  static uint8_t buf[kReadChunk * 4];  // one ADPCM block (ffmpeg writes 1024-byte blocks)
+  static uint8_t buf[kReadChunk * 2];  // one ADPCM block (ffmpeg writes 1024-byte blocks)
   if (clip.dataLeft == 0) return false;
   size_t want = clip.adpcm ? clip.blockAlign : kReadChunk;
   if (want > clip.dataLeft) want = clip.dataLeft;
@@ -401,9 +401,15 @@ Stats stats() {
   return s;
 }
 
+// Short ramps so a clip cut off by the next tap (or stopped) doesn't click.
+constexpr int32_t kFadeSamples = 256;  // ~6 ms
+
 int32_t fillFrames(Frame *frames, int32_t count) {
   static int16_t mono[512];
   static uint32_t primedGen = 0;  // callback-only: the clip that has passed its pre-buffer
+  static uint32_t servedGen = 0;  // callback-only: the clip whose samples were sent last
+  static int32_t fadeIn = 0;      // samples of the current clip sent so far, up to kFadeSamples
+  static int16_t last = 0;        // last sample sent, ramped to 0 when a clip ends early
   int32_t done = 0;
   fills = fills + 1;
   uint32_t g = gen;  // read once: the clip this call is serving
@@ -419,10 +425,16 @@ int32_t fillFrames(Frame *frames, int32_t count) {
       size_t want = min<size_t>(count - done, sizeof(mono) / sizeof(mono[0]));
       size_t got = ring.read((uint8_t *)mono, want * sizeof(int16_t)) / sizeof(int16_t);
       if (got == 0) break;
+      if (servedGen != g) {
+        servedGen = g;
+        fadeIn = 0;
+      }
       for (size_t i = 0; i < got; i++) {
-        int16_t s = (int16_t)(((int32_t)mono[i] * gain) >> 15);
-        frames[done + i].channel1 = s;
-        frames[done + i].channel2 = s;
+        int32_t s = ((int32_t)mono[i] * gain) >> 15;
+        if (fadeIn < kFadeSamples) s = s * fadeIn++ / kFadeSamples;
+        frames[done + i].channel1 = (int16_t)s;
+        frames[done + i].channel2 = (int16_t)s;
+        last = (int16_t)s;
       }
       done += got;
     }
@@ -435,9 +447,17 @@ int32_t fillFrames(Frame *frames, int32_t count) {
     }
   }
 
+  // Silence, starting with a ramp from wherever the last clip stopped.
   for (int32_t i = done; i < count; i++) {
-    frames[i].channel1 = 0;
-    frames[i].channel2 = 0;
+    int16_t s = 0;
+    if (last != 0) {
+      int32_t step = last / 32;
+      if (step == 0) step = last > 0 ? 1 : -1;
+      last = (int16_t)(last - step);
+      s = last;
+    }
+    frames[i].channel1 = s;
+    frames[i].channel2 = s;
   }
   return count;
 }
