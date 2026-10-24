@@ -19,7 +19,8 @@ jobs:
         with:
           path: ~/.platformio
           key: pio-${{ hashFiles('firmware/platformio.ini') }}
-      - run: pip install platformio
+      # pioarduino's ESP-IDF build calls click.parser.split_arg_string, which newer click breaks
+      - run: pip install platformio "click<8.2"
       # Builds the app and fails if it is over the 2.25 MB budget (scripts/check_size.py)
       - run: pio run -d firmware
       # The LittleFS image builds even without the (non-redistributable) sounds
