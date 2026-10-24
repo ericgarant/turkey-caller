@@ -3,6 +3,7 @@
 #include <BluetoothA2DPSource.h>
 #include <Preferences.h>
 #include <esp32-hal-bt.h>
+#include <esp_coexist.h>
 
 #include "player.h"
 
@@ -16,6 +17,8 @@ String speaker;  // saved speaker name, set once at boot
 portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
 Device seen[kMaxDevices];
 size_t seenCount = 0;
+bool started = false;               // A2DP stack started (it searches until it connects)
+volatile bool searchRequested = false;
 
 void remember(const char *name, esp_bd_addr_t a, int rssi) {
   char addr[18];
@@ -41,7 +44,18 @@ bool onFound(const char *name, esp_bd_addr_t addr, int rssi) {
 }
 
 void onState(esp_a2d_connection_state_t state, void *) {
-  log_i("speaker %s", a2dp.to_str(state));
+  Serial.printf("speaker %s\n", a2dp.to_str(state));
+  // While searching, give Wi-Fi the radio so phones can still join; once connected, share it.
+  esp_coex_preference_set(state == ESP_A2D_CONNECTION_STATE_CONNECTED ? ESP_COEX_PREFER_BALANCE
+                                                                       : ESP_COEX_PREFER_WIFI);
+}
+
+void startStack() {
+  if (started) return;
+  started = true;
+  esp_coex_preference_set(ESP_COEX_PREFER_WIFI);
+  a2dp.start();
+  Serial.printf("Bluetooth started, saved speaker: \"%s\"\n", speaker.c_str());
 }
 
 }  // namespace
@@ -62,8 +76,19 @@ void begin() {
   a2dp.set_data_callback_in_frames(player::fillFrames);
   // Reconnect straight to the last speaker's address; search by name only when there is none.
   a2dp.set_auto_reconnect(speaker.length() > 0);
-  a2dp.start();
-  log_i("Bluetooth up, saved speaker: \"%s\"", speaker.c_str());
+  // With no speaker saved, don't search until asked: an endless Bluetooth search starves
+  // Wi-Fi of radio time and phones fail to join the access point.
+  if (speaker.length() > 0) startStack();
+  else Serial.println("Bluetooth idle: no speaker saved, waiting for a search request");
+}
+
+void requestSearch() { searchRequested = true; }
+
+void loop() {
+  if (searchRequested) {
+    searchRequested = false;
+    startStack();
+  }
 }
 
 bool connected() { return a2dp.is_connected(); }
@@ -73,7 +98,7 @@ const char *state() {
     case ESP_A2D_CONNECTION_STATE_CONNECTED: return "connected";
     case ESP_A2D_CONNECTION_STATE_CONNECTING: return "connecting";
     case ESP_A2D_CONNECTION_STATE_DISCONNECTING: return "disconnecting";
-    default: return speaker.length() ? "searching" : "no speaker chosen";
+    default: return started ? "searching" : "idle";
   }
 }
 

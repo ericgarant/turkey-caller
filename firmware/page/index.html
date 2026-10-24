@@ -81,6 +81,11 @@ async function loadSounds() {
 
 async function loadDevices(st) {
   if (st.bt === 'connected') { $('devs').innerHTML = ''; return; }
+  if (st.bt === 'idle') {
+    $('devs').innerHTML = '<div class="row"><span style="color:var(--dim)">Put the speaker in pairing mode, then:</span><button class="small" id="scan">Search for speakers</button></div>';
+    $('scan').onclick = () => post('/api/bt/scan').then(() => say('Searching…')).catch(e => say(e.message));
+    return;
+  }
   const list = await (await fetch('/api/bt/devices')).json();
   const box = $('devs');
   box.innerHTML = list.length ? '' : '<div class="row" style="color:var(--dim)">Searching… turn the speaker on and put it in pairing mode.</div>';

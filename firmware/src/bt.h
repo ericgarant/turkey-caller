@@ -12,7 +12,9 @@ struct Device {
 
 void begin();                  // start the BT stack (call before Wi-Fi)
 bool connected();
-const char *state();           // "no speaker chosen", "searching", "connecting", "connected", "disconnecting"
+const char *state();           // "idle" (not searching), "searching", "connecting", "connected", "disconnecting"
+void requestSearch();          // start looking for speakers (from any task)
+void loop();                   // call from loop(): starts a requested search
 String speakerName();          // saved speaker name ("" = none yet)
 size_t devices(Device *out, size_t max);  // speakers seen while searching
 void chooseSpeaker(const char *name);     // save the name, forget the last address, reboot

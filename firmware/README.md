@@ -39,7 +39,7 @@ Uploads run at 460800 baud because 921600 fails on this board's CH340 chip under
 
 1. Turn the speaker on and put it in pairing mode (Samsung Level Box Slim: hold the Bluetooth button until it announces pairing).
 2. On a phone, join Wi-Fi **TurkeyCaller**, password **gobble123**. The page should pop up; if not, open `http://192.168.4.1`.
-3. Under **Speaker**, the ESP32 lists the speakers it finds. Tap **Use** next to yours. The ESP32 saves the name, restarts, connects, and from then on reconnects to that speaker by itself.
+3. Under **Speaker**, tap **Search for speakers**. The ESP32 lists the speakers it finds; tap **Use** next to yours. The ESP32 saves the name, restarts, connects, and from then on reconnects to that speaker by itself.
 4. Tap the call buttons. **Stop** and the **volume** slider act right away (volume is saved).
 5. **Stress test: 50 taps** plays 50 calls 150 ms apart and reports failed taps, underruns, and the lowest free heap.
 
@@ -62,6 +62,6 @@ Parameters are form fields or query strings; replies are JSON.
 
 ## Known limits of Phase 0
 
-- While no speaker is connected the ESP32 keeps searching for one. Searching shares the radio with Wi-Fi, so the page can feel slower until the speaker connects.
+- Bluetooth searching takes most of the shared radio, enough that phones can fail to join the Wi-Fi. So with no speaker saved, the ESP32 only searches after you tap **Search for speakers**, and it favours Wi-Fi while searching. With a saved speaker that is switched off, it keeps trying to reconnect, so turn the speaker on first.
 - Clips must be 44.1 kHz (the A2DP rate). Other rates play at the wrong speed; the serial log warns once.
 - The Wi-Fi name and password are fixed in `src/web.cpp`; they become settings in Phase 2.
