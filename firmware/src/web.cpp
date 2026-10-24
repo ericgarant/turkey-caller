@@ -294,6 +294,7 @@ void makeEtag() {
 
 void handlePage(AsyncWebServerRequest *req) {
   if (lowMemory(req)) return;
+  Serial.printf("GET / heap=%u block=%u\n", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
   if (req->hasHeader("If-None-Match") && req->header("If-None-Match") == etag) {
     AsyncWebServerResponse *res = req->beginResponse(304);
     res->addHeader("ETag", etag);
