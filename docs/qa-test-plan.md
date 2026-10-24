@@ -9,7 +9,7 @@ Test setup: ESP32 plugged into the Mac (power and serial log), speaker charged a
 | Test | What it covers |
 |---|---|
 | `npm run test:api` | API contract on the mock: status fields, sound list shape, play/replace/stop, 400/404/409/413 errors, volume clamp, upload and delete rules, config validation, forget and reconnect |
-| `npm test` (smoke) | Page flows in a phone-sized browser: 12 calls, play/stop, volume, speaker forget/search/use, upload/delete, Wi-Fi settings, dawn mode |
+| `npm test` (smoke) | Page flows in a phone-sized browser: 12 calls, play/stop, volume, speaker forget/search/use, upload/delete hidden (F03 deferred), Wi-Fi settings, dawn mode |
 | `npm run stress` | 50 rapid plays (150 ms apart) against the mock; same pass rule as the board test B9 |
 
 The same scripts run against the board: `node web/test/stress.mjs http://192.168.4.1` and `node web/test/api.mjs http://192.168.4.1`. On the board `api.mjs` runs only read-only and play/stop/volume steps; `DESTRUCTIVE=1` adds forget, config, upload and delete (these change the board). It lists every mismatch at the end (for example the `bt` state strings the Phase 0 firmware reports, which differ from the page's `idle/searching/connecting/connected`). Any firmware change to the API must update the mock and `api.mjs` in the same PR.
