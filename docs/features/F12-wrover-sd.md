@@ -27,7 +27,7 @@ GPIO 16 and 17 are taken by the PSRAM on WROVER modules, so nothing else may use
 ## Build
 
 - A new PlatformIO env `wrover` (board `esp-wrover-kit` or `esp32dev` with the PSRAM flags) becomes the default env. The README flash steps use it.
-- The old env stays as `wroom`, built in CI only, so the spare board can be reflashed. Before F12 merges, main is tagged `wroom-final` as a known-good build for the spare.
+- The old env stays as `wroom`, built in CI only, so the spare board can be reflashed. The branch `wroom-final` (main at 6a75dc5, with the instructions page) is the known-good build for the spare; nothing is merged into it.
 - `check_size.py` keeps its 2.25 MB budget, unless the probe shows the WROVER-E has more than 4 MB of flash.
 
 ## Acceptance criteria (new QA row B18)

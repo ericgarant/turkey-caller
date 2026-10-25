@@ -10,7 +10,7 @@ The illustrated version of this document lives at https://claude.ai/artifact/87p
 | ESP32 ↔ speaker | Bluetooth Classic A2DP, ESP32 as source (ESP32-A2DP) |
 | Web app | Plain HTML/CSS/JS, gzipped and compiled into the firmware (`web/build.py` → `firmware/src/web_page.h`), so `uploadfs` never touches it and a page update never wipes uploaded sounds. No internet needed |
 | Audio | Mono IMA ADPCM WAV, 22.05 kHz (~11 KB/s; the 11 clips are ~0.83 MB), upsampled to 44.1 kHz on the ESP32. Not MP3: on the board, the Helix MP3 decoder's ~30 KB of heap left the Bluetooth stack too little to keep streaming with Wi-Fi up and a phone on the page. ADPCM decoding needs no heap and almost no CPU; turkey calls have little energy above 8 kHz, so the 11 kHz bandwidth loses nothing that matters |
-| Board | Main: Freenove ESP32-WROVER-E with 8 MB PSRAM and a 1 GB microSD card (from F12, 25 Oct 2026). Spare: Freenove ESP32-WROOM-32E (4 MB flash, no PSRAM), which runs the `wroom-final` build |
+| Board | Main: Freenove ESP32-WROVER-E with 8 MB PSRAM and a 1 GB microSD card (from F12, 25 Oct 2026). Spare: Freenove ESP32-WROOM-32E (4 MB flash, no PSRAM), which runs the `wroom-final` branch |
 | Storage | Built-in calls in flash, phone uploads on the SD card ([F12](features/F12-wrover-sd.md)). `partitions.csv`: 2.5 MB factory app, 1.375 MB LittleFS, no OTA. The build fails if the app binary passes 2.25 MB (90% of its partition). The data partition is named and typed `spiffs` (the Arduino and PlatformIO default) but formatted as LittleFS (`board_build.filesystem = littlefs`), so plain `LittleFS.begin()` and `pio run -t uploadfs` work |
 | Toolchain | PlatformIO + pioarduino (Arduino core 3.x) |
 
