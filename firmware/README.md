@@ -42,7 +42,7 @@ Uploads run at 460800 baud because 921600 fails on this board's CH340 chip under
 
 1. Turn the speaker on and put it in pairing mode (Samsung Level Box Slim: hold the Bluetooth button until it announces pairing).
 2. On a phone, join Wi-Fi **TurkeyCaller**, password **gobble123**. The page should pop up; if not, open `http://192.168.4.1`.
-3. Under **Speaker**, tap **Search for speakers**. The ESP32 lists the speakers it finds; tap **Use** next to yours. The ESP32 saves the name, restarts, connects, and from then on reconnects to that speaker by itself.
+3. Under **Speaker**, tap **Search for speakers**. The ESP32 lists the speakers it finds; tap **Use** next to yours. The ESP32 saves it and connects by address (no restart), and from then on reconnects to that speaker by itself: every 3 s for the first minute it is gone, then every 10 s. A tap on a speaker that went to sleep wakes it first (the page says "Waking the speaker"); if it doesn't answer within 8 s the page says so.
 4. Tap the call buttons. **Repeat** loops a call, **Stop** and the **volume** slider act right away (volume is saved).
 5. From a computer on the board's Wi-Fi, `cd web && node test/stress.mjs http://192.168.4.1` taps 50 calls and reports failed taps, underruns and the lowest free heap, and `node test/api.mjs http://192.168.4.1` checks the API contract.
 
@@ -54,7 +54,7 @@ Clips are `data/sounds/<id>.wav`, where the id is `a-z0-9_`, 24 characters at mo
 
 ## API
 
-The contract is in `../web/README.md`. POST bodies are form fields; replies are JSON. `/api/status` (and each `/ws` push) includes `version`, `minHeap`, `fsFree` and `fsTotal`. Not built yet, and answering 501: upload and delete (`POST /api/sounds`, `/api/sounds/delete`, F03) and `/api/config` (F05). `POST /api/bt/connect` takes `addr` and `name` but still finds the speaker by name and restarts (connecting by address is F06).
+The contract is in `../web/README.md`. POST bodies are form fields; replies are JSON. `/api/status` (and each `/ws` push) includes `version`, `minHeap`, `fsFree` and `fsTotal`. Not built yet, and answering 501: upload and delete (`POST /api/sounds`, `/api/sounds/delete`, F03) and `/api/config` (F05).
 
 ## Known limits
 
