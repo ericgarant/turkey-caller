@@ -11,9 +11,13 @@ Test setup: ESP32 plugged into the Mac (power and serial log), speaker charged a
 | `npm run test:api` | API contract on the mock: status fields, sound list shape, play/replace/stop, 400/404/409/413 errors, volume clamp, upload and delete rules, config validation, forget and reconnect |
 | `node web/test/settings.mjs` | Two phones on the mock: F05 settings sync live, edits in progress kept, stale saves refused, Wi-Fi change and BOOT reset rejoin messages, volume and Repeat shared |
 | `npm test` (smoke) | Page flows in a phone-sized browser: 12 calls, play/stop, volume, speaker forget/search/use, upload/delete hidden (F03 deferred), Wi-Fi settings, dawn mode |
+| `npm run test:features` | HTTP and WebSocket tests on the mock: every call plays, volume (HTTP, WebSocket, clamp, seen by both phones within 1 s), Repeat shared by two clients (late joiner, switching during a call, replace, Stop, forget), busy 503 recovery, and speaker wake and reconnect (F06/F07, active once the PR #14 mock hook is on main). Upload tests are parked (phone upload deferred, PR #12); `RUN_PARKED=1` runs them |
+| `npm run test:phones` | Two phones in a browser: playing state, Repeat and volume stay in step; the page retries through a busy window and says so when the board stays busy |
 | `npm run stress` | 50 rapid plays (150 ms apart) against the mock; same pass rule as the board test B9 |
 
 The same scripts run against the board: `node web/test/stress.mjs http://192.168.4.1` and `node web/test/api.mjs http://192.168.4.1`. On the board `api.mjs` runs only read-only and play/stop/volume steps; `DESTRUCTIVE=1` adds forget, config, upload and delete (these change the board). It lists every mismatch at the end (for example the `bt` state strings the Phase 0 firmware reports, which differ from the page's `idle/searching/connecting/connected`). Any firmware change to the API must update the mock and `api.mjs` in the same PR.
+
+What the mock cannot show, so it stays a board test: audio quality, real timing of retries (3 s / 10 s) and the 250 ms pre-roll, the 5 min idle pause, heap and underruns, Wi-Fi/Bluetooth sharing the radio, and a second tap keeping the first tap's 8 s deadline.
 
 ## Board tests (Eric, by hand)
 

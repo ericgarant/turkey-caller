@@ -86,7 +86,7 @@ try {
     }
   });
   await step("BOOT reset: phones are told settings were reset, then show the defaults", async () => {
-    await fetch(URL + "mock/boot-reset", { method: "POST" });
+    await fetch(URL + "api/mock/boot-reset", { method: "POST" });
     for (const p of [a, b]) await p.waitForFunction(() => document.getElementById("offTitle").textContent === "Wi-Fi settings reset", null, within(1500));
     for (const p of [a, b]) {
       await p.waitForFunction(() => document.getElementById("apSsid").value === "TurkeyCaller" && document.getElementById("offline").hidden, null, within(20000));
