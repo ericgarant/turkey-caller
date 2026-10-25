@@ -148,7 +148,7 @@ void handleStatus(AsyncWebServerRequest *req) {
 void handleSounds(AsyncWebServerRequest *req) {
   if (lowMemory(req)) return;
   String j;
-  j.reserve(library::count() * 90 + 2);
+  j.reserve(library::count() * 150 + 2);
   j += '[';
   library::Sound s;
   for (size_t i = 0; library::get(i, s); i++) {
@@ -157,9 +157,13 @@ void handleSounds(AsyncWebServerRequest *req) {
     j += s.id;  // validated a-z0-9_
     j += "\",\"name\":";
     jsonStr(j, s.name);
-    j += ",\"group\":\"";
+    j += ",\"animal\":\"";
+    j += s.animal;  // turkey, moose or deer (F14)
+    j += "\",\"group\":\"";
     j += s.group;
-    j += "\",\"bytes\":" + String(s.bytes) + ",\"ms\":" + String(s.ms) + "}";
+    j += "\",\"hint\":";
+    jsonStr(j, s.hint);
+    j += ",\"bytes\":" + String(s.bytes) + ",\"ms\":" + String(s.ms) + "}";
   }
   j += ']';
   req->send(200, "application/json", j);

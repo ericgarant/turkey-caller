@@ -280,10 +280,14 @@ void closeCurrent() {
 }
 
 void startClip(const char *id, bool loop, uint32_t preRollMs) {
-  char path[48];
-  snprintf(path, sizeof(path), "/sounds/%s.wav", id);
   library::Sound snd;
-  fromCard = library::find(id, snd) && snd.card;
+  if (!library::find(id, snd)) {
+    Serial.printf("can't play %s: unknown sound\n", id);
+    return;
+  }
+  char path[56];
+  library::path(snd, path, sizeof(path));  // flash, a pack or an upload (F14)
+  fromCard = snd.card;
   fs::FS *fs = fromCard ? sdcard::fs() : &LittleFS;
   if (!fs) {
     Serial.printf("can't play %s: no SD card\n", id);
