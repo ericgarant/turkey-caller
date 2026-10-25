@@ -238,7 +238,7 @@ void begin() {
     // 2. Packs, alphabetical by folder.
     char packs[kMaxPacks][sizeof(Sound::pack)];
     size_t np = 0;
-    File dir = card->open("/packs");
+    File dir = card->exists("/packs") ? card->open("/packs") : File();  // no folder: no error line
     if (dir && dir.isDirectory()) {
       for (File f = dir.openNextFile(); f; f = dir.openNextFile()) {
         bool isDir = f.isDirectory();
