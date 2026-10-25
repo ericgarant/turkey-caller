@@ -32,7 +32,11 @@ const NEARBY = [
   { name: "", addr: "00:1A:7D:DA:71:13", rssi: -88 }, // nameless: Phase 0 cannot pick it
 ];
 
-const cfg = { ap_ssid: "TurkeyCaller", ap_pass: "gobble123", device_name: "Turkey Caller" };
+const DEFAULTS = { ap_ssid: "TurkeyCaller", ap_pass: "gobble123", device_name: "Turkey Caller" };
+const cfg = { ...DEFAULTS };
+// Like the board: a random non-zero rev at each boot, +1 on every saved change (F05)
+const newRev = () => 1 + crypto.randomInt(0x7ffffffe);
+let rev = newRev(), downUntil = 0;
 const st = { bt: "connected", speaker: "Level Box Slim", stream: "ready", error: "", playing: false, current: "", loop: false, repeat: false, volume: 70 };
 // Test hook (mock only): POST /api/mock/speaker mode=asleep|off|on. Asleep: connected, stream
 // suspended, a tap wakes it in 1 s. Off: saved but out of reach, a tap gives up after 8 s.
@@ -48,7 +52,7 @@ function status() {
   if (st.loop && len) pos %= len;
   const used = sounds.reduce((a, x) => a + x.bytes, 0) + 18000;
   return {
-    ...st, pos_ms: pos, len_ms: len, plays: 0, underruns: 0,
+    ...st, cfg: rev, pos_ms: pos, len_ms: len, plays: 0, underruns: 0,
     heap: 70000 + Math.round(Math.random() * 3000), minHeap: 52880, maxBlock: 40000,
     fsFree: FS_TOTAL - used, fsTotal: FS_TOTAL, clients: sockets.size || 1,
     uptime: Math.floor((Date.now() - boot) / 1000) + 4380, version: "mock",
@@ -134,7 +138,18 @@ function body(req) {
   return new Promise((resolve) => { const parts = []; req.on("data", (c) => parts.push(c)); req.on("end", () => resolve(Buffer.concat(parts))); });
 }
 
+// A restart: tell every page, drop all connections, refuse new ones for 3 s, come back with a new rev.
+function restart(reason) {
+  for (const s of sockets) wsSend(s, JSON.stringify({ evt: "restart", reason, ssid: cfg.ap_ssid }));
+  setTimeout(() => {
+    stop(); downUntil = Date.now() + 3000; rev = newRev();
+    for (const s of sockets) s.destroy();
+    sockets.clear();
+  }, 1000);
+}
+
 const server = http.createServer(async (req, res) => {
+  if (Date.now() < downUntil) return req.socket.destroy();
   const url = new URL(req.url, "http://x");
   const raw = await body(req);
   const isForm = (req.headers["content-type"] || "").startsWith("application/x-www-form-urlencoded");
@@ -179,12 +194,23 @@ const server = http.createServer(async (req, res) => {
       return ok(res);
     }
     case "POST /api/bt/forget": stop(); Object.assign(st, { bt: "idle", stream: "down", error: "", speaker: "" }); push(); return ok(res);
-    case "GET /api/config": return json(res, 200, { ap_ssid: cfg.ap_ssid, device_name: cfg.device_name });
-    case "POST /api/config":
-      if (!p.ap_ssid || p.ap_ssid.length > 32) return fail(res, 400, "Wi-Fi name must be 1 to 32 characters");
-      if (p.ap_pass && (p.ap_pass.length < 8 || p.ap_pass.length > 63)) return fail(res, 400, "password must be 8 to 63 characters");
-      Object.assign(cfg, { ap_ssid: p.ap_ssid, device_name: p.device_name || cfg.device_name }, p.ap_pass ? { ap_pass: p.ap_pass } : {});
-      return ok(res);
+    case "GET /api/config":
+      return json(res, 200, { ap_ssid: cfg.ap_ssid, device_name: cfg.device_name, default_pass: cfg.ap_pass === DEFAULTS.ap_pass, rev });
+    case "POST /api/config": {
+      if (p.rev !== undefined && +p.rev !== rev) return fail(res, 409, "changed on another phone");
+      const ssid = p.ap_ssid ?? cfg.ap_ssid, name = p.device_name ?? cfg.device_name, pass = p.ap_pass || "";
+      if (!ssid || ssid.length > 32) return fail(res, 400, "Wi-Fi name must be 1 to 32 characters");
+      if (!name || name.length > 24) return fail(res, 400, "device name must be 1 to 24 characters");
+      if (pass && (pass.length < 8 || pass.length > 63)) return fail(res, 400, "password must be 8 to 63 characters");
+      const wifi = ssid !== cfg.ap_ssid || (pass && pass !== cfg.ap_pass);
+      Object.assign(cfg, { ap_ssid: ssid, device_name: name }, pass ? { ap_pass: pass } : {});
+      rev++;
+      json(res, 200, { ok: true, restart: !!wifi });
+      if (wifi) restart("settings"); else push();
+      return;
+    }
+    // Test hook: holding BOOT for 5 s on the board
+    case "POST /api/mock/boot-reset": Object.assign(cfg, DEFAULTS); rev++; ok(res); return restart("reset");
     case "POST /api/sounds": {
       if (st.playing) return fail(res, 409, "stop playback first");
       const m = /filename="([a-z0-9_]{1,24})\.wav"/.exec(raw.toString("latin1"));
@@ -208,7 +234,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.on("upgrade", (req, sock) => {
-  if (req.url !== "/ws") return sock.destroy();
+  if (req.url !== "/ws" || Date.now() < downUntil) return sock.destroy();
   const accept = crypto.createHash("sha1").update(req.headers["sec-websocket-key"] + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest("base64");
   sock.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
   sockets.add(sock);

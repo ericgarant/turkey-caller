@@ -39,7 +39,8 @@ Agreed with the firmware thread; the summary table is in `../docs/architecture.m
 | `POST /api/bt/scan`, `GET /api/bt/devices` | Devices reply `{scanning, devices:[{name, addr, rssi}]}`; a bare array also works |
 | `POST /api/bt/connect` `addr`, `name` | Saves the speaker and connects by `addr` without a restart; `name` is for display and may be empty (the address is shown then). 400 when both are empty |
 | `POST /api/bt/forget` | Disconnects and clears the saved speaker, no restart; stops playback |
-| `GET /api/config` → `ap_ssid`, `device_name`; `POST /api/config` adds `ap_pass` | Password is never returned; empty means unchanged. Saving restarts the board |
+| `GET /api/config` → `ap_ssid`, `device_name`, `default_pass`, `rev`; `POST /api/config` adds `ap_pass` and `rev` | Password is never returned; empty means unchanged. Stale `rev` → 409. Reply `restart` is true only for Wi-Fi name or password changes. Status carries `cfg` (the rev) so every phone reloads on a change; see F05 |
+| WS `{"evt":"restart","reason":"settings"\|"reset","ssid"}` | Sent just before a settings restart or BOOT reset; the page shows the rejoin message |
 | `POST /api/sounds` multipart `file` | The page renames the file to `a-z0-9_` (max 24 chars) + `.wav`. 409 while playing, 413 when full |
 | `POST /api/sounds/delete` `id` | 409 while playing |
 | `WS /ws` | Board pushes the `/api/status` JSON on change, every 2 s while playing, else every 10 s. The page sends `{"cmd":"volume","level":N}` and `{"cmd":"repeat","on":true}` over it; play and stop go over HTTP so errors come back as status codes. Without the socket the page polls `/api/status` every 3 s |

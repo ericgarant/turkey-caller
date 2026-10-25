@@ -82,7 +82,8 @@ try {
   await step("short Wi-Fi password is refused before sending", async () => {
     await page.fill("#apPass", "short");
     await page.click("#cfgSave");
-    await page.waitForFunction(() => /8 characters/.test(document.getElementById("toast").textContent));
+    await page.waitForFunction(() => /8 to 63 characters/.test(document.querySelector("#fPass .err").textContent));
+    await page.fill("#apPass", "");
   });
   await step("dawn mode turns on and is remembered", async () => {
     await page.click("#dawnBtn");
