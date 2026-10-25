@@ -85,6 +85,12 @@ try {
     await page.waitForFunction(() => /8 to 63 characters/.test(document.querySelector("#fPass .err").textContent));
     await page.fill("#apPass", "");
   });
+  await step("instructions page opens from the ? button and covers the BOOT reset", async () => {
+    await page.click('[data-go="help"]');
+    assert.equal(await page.locator("#s-help").isVisible(), true);
+    assert.match(await page.locator("#s-help").innerText(), /BOOT[\s\S]*5 seconds[\s\S]*gobble123/);
+    await page.click('nav [data-go="calls"]');
+  });
   await step("dawn mode turns on and is remembered", async () => {
     await page.click("#dawnBtn");
     await page.reload();

@@ -79,6 +79,7 @@ input[type=range]{width:100%;accent-color:var(--accent);height:32px;margin:0}
 .switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--muted);transition:left .15s}
 .switch:checked{background:var(--accent);border-color:var(--accent)}
 .switch:checked::after{left:21px;background:var(--on-accent)}
+.help ol,.help ul{margin:0;padding-left:22px}.help li{margin:0 0 6px}.help p{margin:0 0 8px}.help .sub{margin:0}.tb{margin:0}.tb dt{color:var(--fg);font-weight:600;text-align:left;margin-top:10px}.tb dt:first-child{margin-top:0}.tb dd{text-align:left;font-family:var(--body);color:var(--muted)}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px}
 .row{display:flex;align-items:center;gap:12px;min-width:0}
 .grow{flex:1;min-width:0}
@@ -127,6 +128,7 @@ nav button[aria-current="page"]{color:var(--accent)}
     <div class="brand" id="brand">Turkey Caller</div>
     <button class="pill" id="spkPill" type="button" data-go="speaker"><i class="dot" id="spkDot"></i><span id="spkText">Loading…</span></button>
     <div class="spacer"></div>
+    <button class="iconbtn" type="button" data-go="help" aria-label="Instructions" title="Instructions"><b aria-hidden="true">?</b></button>
     <button class="iconbtn" id="dawnBtn" type="button" aria-pressed="false" aria-label="Dawn mode" title="Dawn mode: dim red screen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg>
     </button>
@@ -188,6 +190,74 @@ nav button[aria-current="page"]{color:var(--accent)}
       <div>
         <h2>Device</h2>
         <div class="card"><dl id="devInfo"></dl></div>
+      </div>
+    </section>
+    <section class="screen" id="s-help" hidden>
+      <div>
+        <h2>Join the caller</h2>
+        <div class="card help">
+          <ol>
+            <li>Power the caller. Give it about 10 seconds.</li>
+            <li>On your phone, join the Wi-Fi <b>TurkeyCaller</b> with password <b>gobble123</b> (unless you changed them under Settings).</li>
+            <li>Open this page. If the phone says "no internet", stay connected anyway.</li>
+          </ol>
+          <p class="sub">Two phones can be connected at once. Both stay in step.</p>
+        </div>
+      </div>
+      <div>
+        <h2>Pair the speaker</h2>
+        <div class="card help">
+          <ol>
+            <li>Turn the speaker on and put it in pairing mode.</li>
+            <li>Open <b>Speaker</b> and tap <b>Search for speakers</b>. It takes about 10 seconds and stops any call playing.</li>
+            <li>Tap <b>Use</b> next to your speaker. The caller remembers it, even after a restart.</li>
+            <li>To switch speakers, tap <b>Forget speaker</b> (twice), then search again.</li>
+          </ol>
+        </div>
+      </div>
+      <div>
+        <h2>Play calls</h2>
+        <div class="card help">
+          <ul>
+            <li>Tap a call to play it. Tap it again, or <b>Stop</b>, to stop.</li>
+            <li><b>Repeat</b> loops the call until you tap Stop. The switch is shared by both phones.</li>
+            <li><b>Volume</b>: slider, or the − and + buttons. It is remembered.</li>
+            <li>If the speaker went to sleep, the first tap wakes it. Allow a few seconds.</li>
+            <li>Gobble and putt are under "Use with care": they can draw hunters or spook birds.</li>
+            <li>The moon button switches to a dim red screen that saves your night vision.</li>
+          </ul>
+        </div>
+      </div>
+      <div>
+        <h2>Settings</h2>
+        <div class="card help">
+          <ul>
+            <li><b>Wi-Fi name</b> and <b>password</b> (8 to 63 characters): changing either restarts the caller. Rejoin the new Wi-Fi afterwards.</li>
+            <li><b>Device name</b> shows at the top of this page. No Wi-Fi restart.</li>
+            <li>Every change shows on both phones at once. If the other phone saved first, yours asks you to review before saving.</li>
+            <li>Change the factory password before you rely on the caller.</li>
+          </ul>
+        </div>
+      </div>
+      <div>
+        <h2>Reset to defaults</h2>
+        <div class="card help">
+          <p>Forgot the Wi-Fi password? With the caller <b>powered on and running</b>, hold the <b>BOOT</b> button on the board for <b>5 seconds</b>. It restarts with Wi-Fi <b>TurkeyCaller</b>, password <b>gobble123</b> and the default device name.</p>
+          <p class="sub">It keeps the speaker, volume and sounds. A short tap does nothing. Do not hold BOOT while plugging in power: that puts the board in programming mode.</p>
+        </div>
+      </div>
+      <div>
+        <h2>Troubleshooting</h2>
+        <div class="card help">
+          <dl class="tb">
+            <dt>"Speaker did not answer"</dt><dd>Turn the speaker on, bring it close, and tap the call again. Still nothing: Speaker, then Forget, then search and Use again.</dd>
+            <dt>"No speaker connected"</dt><dd>Pair one under Speaker.</dd>
+            <dt>No sound, speaker connected</dt><dd>Raise the volume on this page and on the speaker itself.</dd>
+            <dt>"Lost the caller"</dt><dd>Check your phone is still on the caller's Wi-Fi. The page reconnects by itself.</dd>
+            <dt>Crackle or dropouts</dt><dd>Move the speaker closer and keep it clear of obstacles. Search only when needed.</dd>
+            <dt>Page will not open</dt><dd>Rejoin the caller's Wi-Fi, then try <b>192.168.4.1</b>. Still stuck: power off and on.</dd>
+          </dl>
+        </div>
       </div>
     </section>
   </main>
@@ -549,7 +619,7 @@ function paint(){
 
 // ---- Screens and dawn mode ----
 function go(name){
-  for(const s of ["calls","speaker","settings"])$("s-"+s).hidden=s!==name;
+  for(const s of ["calls","speaker","settings","help"])$("s-"+s).hidden=s!==name;
   $("dock").hidden=name!=="calls";
   document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-current",b.dataset.go===name?"page":"false"));
   window.scrollTo(0,0);
