@@ -10,6 +10,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 FILTER="silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse,loudnorm=I=-14:TP=-1.0"
+# The six DeerCalls rows match PR #29 (make_deer_pack.sh): same ids, names and hints.
 # pack|id|source (folder/file prefix)|display name (32 bytes max)|hint (47 bytes max)
 # A pack's calls are listed in this order. Ids are unique across all packs and the built-ins.
 CALLS="
@@ -26,15 +27,15 @@ moose|moose_aggr_bull|moose-prerut/6-|Aggressive bull|Aggressive bull, challenge
 moose|moose_big_bull|moose-calls/06-|Big bull|Deep grunt of a big bull
 moose|moose_snorting|moose-calls/07-|Snorting|Bull snorting
 moose|moose_snort_prerut|moose-prerut/1-|Pre-rut snort|Pre-rut snort
-deer|deer_doe_heat|deer-calls/01_|Doe in heat|Estrus bleat, pulls a rutting buck
-deer|deer_doe_bleat|deer-calls/02_|Doe bleat|Plaintive doe bleat
+deer|deer_doe_estrus|deer-calls/01_|Doe in estrus|Doe bleat in heat, draws a buck in
+deer|deer_doe_bleat|deer-calls/02_|Doe bleat|Plaintive doe call, calm, all day
 deer|deer_doe|moose-calls/08-|Doe call|Short doe bleat
-deer|deer_buck_tending|deer-calls/03_|Tending grunt|Buck grunting while he tends a doe
-deer|deer_buck_trail|deer-calls/06_|Trailing grunt|Buck trailing a doe
-deer|deer_buck_grunt|deer-calls/05_|Buck grunt|Buck grunt series in the rut
+deer|deer_tending_grunt|deer-calls/03_|Tending grunt|Buck grunting while he tends a doe
+deer|deer_trail_grunt|deer-calls/06_|Trailing grunt|Buck following a doe's trail
+deer|deer_buck_grunt|deer-calls/05_|Buck grunt|Rut grunting, long series
 deer|deer_grunt_1|moose-calls/09-|Short grunt|Single short buck grunt
 deer|deer_grunt_2|moose-calls/10-|Grunt series|Short series of buck grunts
-deer|deer_rattling|deer-calls/04_|Antler rattling|Bucks sparring, draws a dominant buck
+deer|deer_rattle|deer-calls/04_|Antler rattle|Rattling antlers, mimics two bucks sparring
 "
 rm -rf data-sd/packs && mkdir -p data-sd/packs
 ROWS="$(mktemp)"; trap 'rm -f "$ROWS"' EXIT
