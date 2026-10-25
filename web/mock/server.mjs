@@ -261,7 +261,7 @@ const server = http.createServer(async (req, res) => {
       const m = /filename="([a-z0-9_]{1,24})\.wav"/.exec(raw.toString("latin1"));
       if (!m) return fail(res, 400, "file must be name.wav with a-z, 0-9 and _");
       const old = sounds.find((x) => x.id === m[1]);
-      if (old && old.group !== "mine") return fail(res, 409, "name already used by a built-in call");
+      if (old && old.group !== "mine") return fail(res, 409, "name already used by a built-in or pack call");
       if (cardPlaying()) return fail(res, 409, "stop playback first");
       if (raw.length + 32768 > sdStatus().sdFree) return fail(res, 413, "not enough room on the SD card");
       const why = wavError(raw);

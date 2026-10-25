@@ -15,7 +15,6 @@ constexpr uint64_t kReserveBytes = 32 * 1024;  // F03: keep this much free on th
 constexpr uint32_t kMaxMs = 60000;             // F03: 60 s per clip
 constexpr uint32_t kRate = 22050;              // F03: what the page's converter writes
 constexpr uint32_t kIdleMs = 15000;            // no data this long: the phone is gone
-constexpr size_t kMaxSounds = 64;              // library.cpp's limit
 
 SemaphoreHandle_t mutex = nullptr;
 const void *owner = nullptr;  // the request the open upload belongs to
@@ -96,8 +95,8 @@ Result start(const void *who, const char *filename, size_t contentLength) {
   strlcpy(id, name.c_str(), sizeof(id));
   library::Sound s;
   bool exists = library::find(id, s);
-  if (exists && !(s.card && !s.pack[0])) return fail(409, "name already used by a built-in call");
-  if (!exists && library::count() >= kMaxSounds) return fail(413, "the caller holds 64 sounds at most");
+  if (exists && !(s.card && !s.pack[0])) return fail(409, "name already used by a built-in or pack call");
+  if (!exists && library::count() >= library::kMaxSounds) return fail(413, "the caller holds 64 sounds at most");
   if (cardPlaying()) return fail(409, "stop playback first");
   // The multipart body is a little bigger than the file: a fair upper bound for the check.
   uint64_t room = sdcard::freeBytes();
@@ -166,9 +165,13 @@ Result finish(const void *who) {
   }
   Serial.printf("upload %s: %u bytes saved heap=%u low=%u\n", id, (unsigned)written, (unsigned)ESP.getFreeHeap(),
                 (unsigned)heapmon::lowSince());
+  char saved[sizeof(id)];
+  strlcpy(saved, id, sizeof(saved));
   reset();
+  uint32_t t0 = millis();
   sdcard::refresh();
-  library::begin();  // the new sound is listed straight away
+  library::putUpload(saved);  // listed straight away, without rescanning the card
+  Serial.printf("upload %s: listed in %u ms\n", saved, (unsigned)(millis() - t0));
   return r;
 }
 
@@ -192,9 +195,10 @@ Result remove(const char *sid) {
   char p[40];
   snprintf(p, sizeof(p), "/sounds/%s.wav", sid);
   if (!card->remove(p)) return {500, "SD card delete failed"};
-  Serial.printf("deleted %s\n", sid);
+  uint32_t t0 = millis();
   sdcard::refresh();
-  library::begin();
+  library::dropUpload(sid);
+  Serial.printf("deleted %s: list updated in %u ms\n", sid, (unsigned)(millis() - t0));
   return {200, ""};
 }
 

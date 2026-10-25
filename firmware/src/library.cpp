@@ -9,7 +9,6 @@
 namespace library {
 namespace {
 
-constexpr size_t kMaxSounds = 64;      // built-ins, packs and uploads together (F14)
 constexpr size_t kMaxIndexBytes = 4096;  // each index.json is read whole; keep it small (F10)
 constexpr size_t kMaxPacks = 8;
 constexpr uint32_t kMaxPackClipMs = 60000;  // F14: pack clips up to 60 s each
@@ -167,6 +166,7 @@ void path(const Sound &s, char *out, size_t cap) {
 }
 
 void begin() {
+  uint32_t startMs = millis();
   size_t count = 0;
   // Scratch list while scanning (~9 KB), freed once the list is built.
   Sound *found = (Sound *)allocList(kMaxSounds * sizeof(Sound));
@@ -289,7 +289,8 @@ void begin() {
   listRev = listRev + 1;
   portEXIT_CRITICAL(&lock);
   free(old);
-  Serial.printf("library: %u sounds, %u of %u bytes free\n", (unsigned)count, (unsigned)freeBytes, (unsigned)totalBytes);
+  Serial.printf("library: %u sounds, %u of %u bytes free, scan %u ms\n", (unsigned)count, (unsigned)freeBytes, (unsigned)totalBytes,
+                (unsigned)(millis() - startMs));
 }
 
 size_t count() {
@@ -326,6 +327,44 @@ bool builtIn(const char *id) {
   Sound s;
   return find(id, s) && !s.card;
 }
+
+// Swaps in a new list built from the current one: without `drop`, plus `add` at the end.
+static bool replaceList(const char *drop, const Sound *add) {
+  portENTER_CRITICAL(&lock);
+  size_t cap = n + 1;
+  portEXIT_CRITICAL(&lock);
+  Sound *list = (Sound *)allocList(cap * sizeof(Sound));
+  if (!list) return false;
+  portENTER_CRITICAL(&lock);
+  size_t m = 0;
+  for (size_t i = 0; i < n && m < cap; i++)
+    if (!drop || strcmp(sounds[i].id, drop)) list[m++] = sounds[i];
+  if (add && m < cap) list[m++] = *add;
+  Sound *old = sounds;
+  sounds = list;
+  n = m;
+  listRev = listRev + 1;
+  portEXIT_CRITICAL(&lock);
+  free(old);
+  return true;
+}
+
+bool putUpload(const char *id) {
+  fs::FS *card = sdcard::fs();
+  if (!card || !validId(id)) return false;
+  Sound s{};
+  strlcpy(s.id, id, sizeof(s.id));
+  s.card = true;
+  char file[56];
+  path(s, file, sizeof(file));
+  if (!probe(*card, file, s)) return false;
+  defaultName(s.id, s.name, sizeof(s.name));
+  strlcpy(s.animal, "turkey", sizeof(s.animal));
+  strlcpy(s.group, "mine", sizeof(s.group));
+  return replaceList(id, &s);
+}
+
+void dropUpload(const char *id) { replaceList(id, nullptr); }
 
 uint32_t rev() { return listRev; }
 uint32_t fsFree() { return freeBytes; }

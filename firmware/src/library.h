@@ -11,6 +11,8 @@
 
 namespace library {
 
+constexpr size_t kMaxSounds = 64;  // built-ins, packs and uploads together (F14)
+
 struct Sound {
   char id[25];     // file name without .wav: a-z0-9_, at most 24 characters
   char name[33];   // display name
@@ -35,5 +37,9 @@ uint32_t rev();                        // bumped by every begin(): phones reload
 uint32_t fsFree();                     // bytes free on LittleFS (cached, updated by begin())
 uint32_t fsTotal();
 bool validId(const char *id);
+// Uploads (F03): list or relist one recording in /sounds/ on the card, or drop one, without
+// rescanning every file (a full begin() takes over 1 s with 40-odd clips on the card).
+bool putUpload(const char *id);
+void dropUpload(const char *id);
 
 }  // namespace library
