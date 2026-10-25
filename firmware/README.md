@@ -1,19 +1,26 @@
 # Firmware
 
-PlatformIO project for the Freenove ESP32-WROOM-32E (4 MB flash, no PSRAM).
+PlatformIO project for two boards (F12):
 
-The ESP32 runs its own Wi-Fi network, serves the control page from `web/`, and plays turkey calls (IMA ADPCM WAV) from LittleFS on a Bluetooth A2DP speaker. Phase 0 proved Wi-Fi and Bluetooth audio work together; the next-phase features are specified in `docs/features/`.
+| Env | Board | Notes |
+|---|---|---|
+| `wrover` (default) | Freenove ESP32-WROVER-E: 4 MB flash, 8 MB PSRAM (4 MB mapped), microSD slot | The main caller |
+| `wroom` | Freenove ESP32-WROOM-32E: 4 MB flash, no PSRAM, no card | The spare. Its known-good build is branch `wroom-final`; `pio run -e wroom -t upload` builds this branch for it |
+
+The ESP32 runs its own Wi-Fi network, serves the control page from `web/`, and plays turkey calls (IMA ADPCM WAV) on a Bluetooth A2DP speaker. Built-in calls are in LittleFS (flash); recordings are on the SD card in `/sounds/`. Phase 0 proved Wi-Fi and Bluetooth audio work together; the next-phase features are specified in `docs/features/`.
 
 | File | Job |
 |---|---|
 | `src/main.cpp` | Boot order, serial health log every 5 s |
 | `src/wav.*` | WAV header reader (format checks, data offset, length in ms) |
-| `src/library.*` | Sound list: order, names and groups from `data/sounds/index.json`, lengths from the WAV headers |
+| `src/library.*` | Sound list: built-ins (order, names and groups from `data/sounds/index.json`), then the card's recordings (group `mine`); lengths from the WAV headers |
+| `src/sdcard.*` | The microSD card (WROVER-E only): mount at boot, free space, "card gone" after a failed read |
 | `src/player.*` | WAV/IMA ADPCM decode task, repeat, resampler to 44.1 kHz, 16 KB ring buffer, volume, A2DP data callback |
 | `src/bt.*` | A2DP source: finds the saved speaker by name, remembers its address, reconnects |
 | `src/web.*` | softAP `TurkeyCaller`, captive DNS, the control page, JSON API, status WebSocket `/ws` |
 | `scripts/prebuild.py` | Before each build: runs `../web/build.py` (page → `src/web_page.h`, fails over 20 KB) and writes `src/version.h` from `git describe` |
 | `scripts/check_size.py` | Fails the build if the app binary is over 2.25 MB (90% of the app partition) |
+| `tools/sd-probe/` | One-off probe for a new board: chip revision, flash and PSRAM size, whether the card answers and mounts |
 | `partitions.csv` | 2.5 MB app, 1.375 MB LittleFS (`data/`, partition labeled `spiffs` so defaults work), 64 KB coredump. No OTA |
 
 ## Flash it (Mac)
@@ -38,6 +45,18 @@ The board is plugged into the Mac by USB.
 
 Uploads run at 460800 baud because 921600 fails on this board's CH340 chip under macOS. If upload can't find the board, list ports with `pio device list` and pass one, for example `pio run -t upload --upload-port /dev/cu.usbserial-110`. The Freenove board uses a CH340 USB chip; recent macOS has the driver built in. If it says "Failed to connect", hold the BOOT button while the upload starts.
 
+## The WROVER-E board and its SD card
+
+Probed on Eric's board on 25 Oct 2026 with `tools/sd-probe` (`pio run -d tools/sd-probe -t upload -t monitor`):
+
+- Chip ESP32-D0WD-V3, revision 3.1. Flash 4 MB (`esptool flash-id`), so the partition table and the 2.25 MB budget are unchanged. PSRAM: 4 MB mapped into the heap (the ESP32 maps at most 4 MB; the rest of the 8 MB chip would need himem).
+- **SD card: SD_MMC 1-bit mode, CLK GPIO 14, CMD GPIO 15, D0 GPIO 2.** GPIO 4 and 12 are not used (12 is a boot strapping pin). FAT16 or FAT32 (on a Mac: Disk Utility, MS-DOS (FAT), Master Boot Record). Eric's card: 960 MB, "APPSD".
+- GPIO 13 is the slot's DAT3 line and Eric's PIR output is soldered to it (F13). The card still answers in SD mode with the PIR holding 13 low, and 1-bit mode never drives DAT3. The firmware never makes GPIO 13 an output.
+- GPIO 16 and 17 belong to the PSRAM. GPIO 33 is the LED (F13).
+- GPIO 2 and 15 are strapping pins. If flashing fails with "Failed to connect" while a card is in, take the card out, flash, and put it back.
+- No card or an unreadable card: the board boots and plays the built-ins; serial says `SD card: none`. Inserting a card needs a restart.
+- Power: (to fill in after the board test: Mac USB or power bank).
+
 ## Connect the speaker and test
 
 1. Turn the speaker on and put it in pairing mode (Samsung Level Box Slim: hold the Bluetooth button until it announces pairing).
@@ -54,7 +73,7 @@ Clips are `data/sounds/<id>.wav`, where the id is `a-z0-9_`, 24 characters at mo
 
 ## API
 
-The contract is in `../web/README.md`. POST bodies are form fields; replies are JSON. `/api/status` (and each `/ws` push) includes `version`, `minHeap`, `fsFree` and `fsTotal`. Not built yet, and answering 501: upload and delete (`POST /api/sounds`, `/api/sounds/delete`, F03).
+The contract is in `../web/README.md`. POST bodies are form fields; replies are JSON. `/api/status` (and each `/ws` push) includes `version`, `minHeap` (internal heap), `fsFree` and `fsTotal` (flash), `sdFree` and `sdTotal` (the card, 0 and 0 with none) and `psramFree` (0 on the WROOM board). `error` carries "SD card removed" when a recording stops because the card failed. Not built yet, and answering 501: upload and delete (`POST /api/sounds`, `/api/sounds/delete`, F03).
 
 ## Known limits
 
