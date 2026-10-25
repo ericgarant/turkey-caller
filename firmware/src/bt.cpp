@@ -8,6 +8,7 @@
 
 #include "heapmon.h"
 #include "player.h"
+#include "settings.h"
 
 namespace bt {
 namespace {
@@ -328,7 +329,7 @@ void begin() {
   // memory (~30 KB) that the default dual mode would keep. The library then finds it running.
   if (!btStartMode(BT_MODE_CLASSIC_BT)) log_e("Bluetooth controller failed to start");
 
-  a2dp.set_local_name("TurkeyCaller");
+  a2dp.set_local_name(settings::deviceName());  // F05: applies at boot
   a2dp.set_ssid_callback(onFound);
   a2dp.set_on_connection_state_changed(onState);
   a2dp.set_discovery_mode_callback(onDiscovery);

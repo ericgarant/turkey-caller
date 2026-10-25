@@ -41,7 +41,7 @@ Uploads run at 460800 baud because 921600 fails on this board's CH340 chip under
 ## Connect the speaker and test
 
 1. Turn the speaker on and put it in pairing mode (Samsung Level Box Slim: hold the Bluetooth button until it announces pairing).
-2. On a phone, join Wi-Fi **TurkeyCaller**, password **gobble123**. The page should pop up; if not, open `http://192.168.4.1`.
+2. On a phone, join Wi-Fi **TurkeyCaller**, password **gobble123** (the factory settings; change them under **Settings**). The page should pop up; if not, open `http://192.168.4.1`.
 3. Under **Speaker**, tap **Search for speakers**. The ESP32 lists the speakers it finds; tap **Use** next to yours. The ESP32 saves it and connects by address (no restart), and from then on reconnects to that speaker by itself: every 3 s for the first minute it is gone, then every 10 s. A tap on a speaker that went to sleep wakes it first (the page says "Waking the speaker"); if it doesn't answer within 8 s the page says so.
 4. Tap the call buttons. **Repeat** loops a call, **Stop** and the **volume** slider act right away (volume is saved).
 5. From a computer on the board's Wi-Fi, `cd web && node test/stress.mjs http://192.168.4.1` taps 50 calls and reports failed taps, underruns and the lowest free heap, and `node test/api.mjs http://192.168.4.1` checks the API contract.
@@ -54,10 +54,15 @@ Clips are `data/sounds/<id>.wav`, where the id is `a-z0-9_`, 24 characters at mo
 
 ## API
 
-The contract is in `../web/README.md`. POST bodies are form fields; replies are JSON. `/api/status` (and each `/ws` push) includes `version`, `minHeap`, `fsFree` and `fsTotal`. Not built yet, and answering 501: upload and delete (`POST /api/sounds`, `/api/sounds/delete`, F03) and `/api/config` (F05).
+The contract is in `../web/README.md`. POST bodies are form fields; replies are JSON. `/api/status` (and each `/ws` push) includes `version`, `minHeap`, `fsFree` and `fsTotal`. Not built yet, and answering 501: upload and delete (`POST /api/sounds`, `/api/sounds/delete`, F03).
 
 ## Known limits
 
 - Bluetooth searching takes most of the shared radio, enough that phones can fail to join the Wi-Fi. So with no speaker saved, the ESP32 only searches after you tap **Search for speakers**, and it favours Wi-Fi while searching. Each search is one round of about 25 s (10 s setup, then ~13 s of inquiry), and the page can be slow or briefly unreachable during it; found speakers stay listed afterwards. Every device seen is printed on serial as a `saw …` line. With a saved speaker that is switched off, it keeps trying to reconnect, so turn the speaker on first.
 - Clips must be mono WAV, IMA ADPCM or 16-bit PCM, at 8 to 44.1 kHz (resampled to the A2DP rate of 44.1 kHz). Anything else is refused with an error on serial.
-- The Wi-Fi name and password are fixed in `src/web.cpp`; they become settings with F05.
+
+## Settings (F05)
+
+`src/settings.*` keeps the Wi-Fi name, password and device name in NVS (namespace `cfg`). The page's **Settings** screen changes them through `/api/config`. A device-name change applies at once on every phone (the Bluetooth name follows at the next restart); a Wi-Fi name or password change makes the board send `{"evt":"restart"}` to every page and restart about 1 s later. The password never leaves the board: not in replies, WebSocket messages or the serial log.
+
+**Forgot the password?** With the board running, hold the **BOOT** button for 5 s. Serial prints `BOOT held 5 s: …`, the Wi-Fi name, password and device name go back to `TurkeyCaller` / `gobble123` / `Turkey Caller`, and the board restarts. The speaker, volume and sounds are kept. Holding BOOT while plugging in or pressing EN starts the chip's download mode instead, which is not this.

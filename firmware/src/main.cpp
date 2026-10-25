@@ -6,6 +6,7 @@
 #include "heapmon.h"
 #include "library.h"
 #include "player.h"
+#include "settings.h"
 #include "version.h"
 #include "web.h"
 
@@ -25,6 +26,7 @@ void setup() {
   if (!LittleFS.begin(true)) Serial.println("LittleFS mount failed");
   Serial.printf("LittleFS: %u of %u bytes used\n", (unsigned)LittleFS.usedBytes(), (unsigned)LittleFS.totalBytes());
 
+  settings::begin();  // Wi-Fi name, password, device name (F05); before Bluetooth and Wi-Fi use them
   library::begin();  // sound list from /sounds/index.json and the clip headers
   heapLog("boot");
   player::begin();
@@ -34,7 +36,8 @@ void setup() {
   web::begin();
   heapLog("wifi+web");
   heapmon::begin();
-  Serial.printf("Ready. Join Wi-Fi \"TurkeyCaller\" (password gobble123), open http://192.168.4.1\n");
+  Serial.printf("Ready. Join Wi-Fi \"%s\" (%s password), open http://192.168.4.1\n", settings::apSsid(),
+                settings::defaultPass() ? "factory" : "your own");
 }
 
 void loop() {
