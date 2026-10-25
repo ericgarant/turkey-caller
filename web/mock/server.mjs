@@ -32,7 +32,7 @@ const NEARBY = [
 const cfg = { ap_ssid: "TurkeyCaller", ap_pass: "gobble123", device_name: "Turkey Caller" };
 const st = { bt: "connected", speaker: "Level Box Slim", playing: false, current: "", loop: false, repeat: false, volume: 70 };
 let playStart = 0, playTimer = null, scanning = false, devices = [];
-let busy = 0;  // test hook (mock only): POST /api/mock/busy count=N answers the next N API calls with 503, like the board's busy window
+let busy = 0, busyUntil = 0;  // test hook (mock only): POST /api/mock/busy count=N (next N API calls) or ms=T (every API call for T ms) answers 503, like the board's busy window
 const boot = Date.now();
 
 function status() {
@@ -123,8 +123,8 @@ const server = http.createServer(async (req, res) => {
   const route = req.method + " " + url.pathname;
   if (process.env.MOCK_LOG) console.log(route, JSON.stringify(p));
 
-  if (route === "POST /api/mock/busy") { busy = +p.count || 0; return ok(res); }
-  if (busy > 0 && url.pathname.startsWith("/api/")) { busy--; return fail(res, 503, "busy, try again"); }
+  if (route === "POST /api/mock/busy") { busy = +p.count || 0; busyUntil = Date.now() + (+p.ms || 0); return ok(res); }
+  if (url.pathname.startsWith("/api/") && (busy > 0 || Date.now() < busyUntil)) { if (busy > 0) busy--; return fail(res, 503, "busy, try again"); }
 
   switch (route) {
     case "GET /": case "GET /index.html":

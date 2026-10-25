@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 const PORT = 8094, base = `http://localhost:${PORT}`;
 const server = spawn(process.execPath, ["mock/server.mjs", String(PORT)], { stdio: ["ignore", "pipe", "inherit"] });
 await new Promise((r) => server.stdout.once("data", r));
-const busy = (count) => fetch(base + "/api/mock/busy", { method: "POST", body: new URLSearchParams({ count: String(count) }) });
+const busy = (form) => fetch(base + "/api/mock/busy", { method: "POST", body: new URLSearchParams(form) });
 const apiStatus = async () => (await fetch(base + "/api/status")).json();
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -69,7 +69,7 @@ try {
     await a.waitForFunction((v) => document.getElementById("vol").value === String(v), down, { timeout: 1000 });
   });
   await step("busy window: a tap is retried by the page and the call plays", async () => {
-    await busy(2);
+    await busy({ count: 2 });
     await a.click('.call[data-id="whine"]');
     await a.waitForSelector('.call.on[data-id="whine"]', { timeout: 6000 });
     await b.waitForSelector('.call.on[data-id="whine"]', { timeout: 2000 });
@@ -77,17 +77,17 @@ try {
     await a.waitForFunction(() => !document.querySelector(".call.on"));
   });
   await step("busy window while the page loads: the calls still appear", async () => {
-    await busy(3);
+    await busy({ count: 3 });
     const c = await open();
     assert.equal(await c.locator(".call").count(), 12);
     await c.context().close();
   });
   await step("busy for longer than the page waits: it says so, nothing plays, and the next tap works", async () => {
-    await busy(7); // more than the page's retries on one request
+    await busy({ ms: 15000 }); // every call, so a stray poll cannot let a retry through; longer than the page waits (about 9 s)
     await a.click('.call[data-id="cluck"]');
     await a.waitForFunction(() => /busy/i.test(document.getElementById("toast").textContent), null, { timeout: 12000 });
+    await busy({ count: 0 }); // ends the busy window (the hook itself is never refused)
     assert.equal((await apiStatus()).playing, false);
-    await busy(0);
     await a.click('.call[data-id="cluck"]');
     await a.waitForSelector('.call.on[data-id="cluck"]', { timeout: 3000 });
     await a.click("#stopBtn");

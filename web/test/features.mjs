@@ -13,6 +13,11 @@ if (!base) {
   await new Promise((r) => server.stdout.once("data", r));
   base = "http://localhost:8095";
 }
+const local = /^http:\/\/(localhost|127\.0\.0\.1)[:/]/.test(base + "/");
+if (!local && process.env.DESTRUCTIVE !== "1") {
+  console.error(`${base} is not a local mock. These tests forget the speaker and change settings; set DESTRUCTIVE=1 to run them anyway.`);
+  process.exit(2);
+}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const get = async (p) => (await fetch(base + p)).json();
 const post = async (p, form = {}) => {
@@ -45,7 +50,8 @@ const parked = async (name, why, fn) => {
   if (process.env.RUN_PARKED !== "1") return console.log("parked -", name, `(${why}; RUN_PARKED=1 runs it)`);
   await step("[parked] " + name, fn);
 };
-const hasHook = async (path, form) => (await post(path, form)).code !== 404;
+// A mock hook answers {ok:true}. A board (captive portal) answers unknown URLs with the page, so only that counts.
+const hasHook = async (path, form) => { const r = await post(path, form); return r.code === 200 && r.body.ok === true; };
 
 try {
   await post("/api/stop");
@@ -62,13 +68,13 @@ try {
     assert.equal(new Set(list.map((s) => s.id)).size, 12);
     assert.deepEqual([...new Set(list.map((s) => s.group))], ["soft", "loud", "care"]);
   });
-  await step("every one of the 12 calls plays, reports its length and ends by itself", async () => {
+  await step("every one of the 12 calls plays and reports its length", async () => {
     for (const s of await get("/api/sounds")) {
       assert.equal((await post("/api/play", { id: s.id, loop: "0" })).code, 200, s.id);
       const st = await status();
       assert.deepEqual([st.playing, st.current, st.len_ms], [true, s.id, s.ms], s.id);
     }
-    await post("/api/stop"); // the last ones are still running; ending by itself is covered in api.mjs
+    await post("/api/stop"); // ending by itself is covered in api.mjs
   });
   await step("volume: HTTP, WebSocket and clamping all end in one level, and every phone sees it within 1 s", async () => {
     const a = await phone(), b = await phone();
