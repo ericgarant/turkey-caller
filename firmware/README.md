@@ -51,8 +51,8 @@ Probed on Eric's board on 25 Oct 2026 with `tools/sd-probe` (`pio run -d tools/s
 
 - Chip ESP32-D0WD-V3, revision 3.1. Flash 4 MB (`esptool flash-id`), so the partition table and the 2.25 MB budget are unchanged. PSRAM: 4 MB mapped into the heap (the ESP32 maps at most 4 MB; the rest of the 8 MB chip would need himem).
 - **SD card: SD_MMC 1-bit mode, CLK GPIO 14, CMD GPIO 15, D0 GPIO 2.** GPIO 4 and 12 are not used (12 is a boot strapping pin). FAT16 or FAT32. Eric's card (960 MB, "APPSD") came with no FAT on it; the probe formatted it (build it with `PLATFORMIO_BUILD_FLAGS="-DPROBE_FORMAT=true"`, which formats only a card that does not mount): FAT32, MBR, 945 MB free. On a Mac: Disk Utility, MS-DOS (FAT), Master Boot Record.
-- GPIO 13 is the slot's DAT3 line and Eric's PIR output is soldered to it (F13). The card still answers in SD mode with the PIR holding 13 low, and 1-bit mode never drives DAT3. The firmware never makes GPIO 13 an output.
-- GPIO 16 and 17 belong to the PSRAM. GPIO 33 is the LED (F13).
+- GPIO 13 is the slot's DAT3 line. 1-bit mode never drives it, and nothing else should be wired to it.
+- GPIO 16 and 17 belong to the PSRAM.
 - GPIO 2 and 15 are strapping pins. If flashing fails with "Failed to connect" while a card is in, take the card out, flash, and put it back.
 - No card or an unreadable card: the board boots and plays the built-ins; serial says `SD card: none`. Inserting a card needs a restart.
 - Power for the board tests: the Mac's USB port.

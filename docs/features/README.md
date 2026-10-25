@@ -18,7 +18,7 @@ Specs for what comes after Phase 0 (the Wi-Fi test page and Bluetooth ADPCM play
 | F10 | [Memory and stability floor](F10-heap-floor.md) | Everyone (cross-cutting) | B9, B16 |
 | F11 | [Future Cooboom speaker](F11-cooboom-speaker.md) | Firmware, QA | B2 to B12 rerun |
 | F12 | [Move to the WROVER-E board with an SD card](F12-wrover-sd.md) | Firmware, web | new B18 |
-| F13 | [Motion sensor and LED](F13-motion-led.md) | Firmware and web (step 1: LED and its setting; step 2 later) | new B19 |
+| F13 | [Motion sensor and LED](F13-motion-led.md) | **Dropped** (Eric removed the PIR and LED, 25 Oct 2026) | — |
 | F14 | [Call packs: deer, moose and more](F14-call-packs.md) | Web (done with the spec), firmware after F12 | new B20 |
 
 ## Suggested build order
@@ -30,14 +30,14 @@ Specs for what comes after Phase 0 (the Wi-Fi test page and Bluetooth ADPCM play
 5. F05.
 6. F12: move to the WROVER-E and its SD card (Eric's decision, 25 Oct 2026).
 7. F03 on top of F12: uploads go to the SD card.
-8. F13 step 1: the LED lights on motion (small, any time after F12). Step 2, motion plays a chosen call, waits until Eric asks.
+8. F14 on top of F12: call packs on the SD card.
 9. F11 when the Cooboom arrives.
 
 ## Deferred, then resumed
 
 Eric skipped uploading his own recordings on 24 Oct 2026 and asked for them back on 25 Oct 2026. The old board's flash had only 32 KB left with 16 calls, so on the same day he chose the Freenove ESP32-WROVER-E with a 1 GB SD card as the main caller (F12).
 
-- **F03 Phone upload** is active again and comes after F12. Uploads are stored on the SD card. Until F03 lands, the firmware keeps answering `POST /api/sounds` and `POST /api/sounds/delete` with `501`, and the page keeps `EDIT_SOUNDS = false` in `web/index.html`.
+- **F03 Phone upload** landed on top of F12 (#30). Uploads are stored in `/sounds/` on the SD card.
 - **F09 More room for sounds** is superseded. The partition and trimming work isn't needed, because the SD card holds the uploads. The old board keeps its layout.
 
 ## Decisions for Eric
