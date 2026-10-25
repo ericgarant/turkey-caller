@@ -434,7 +434,7 @@ function upload(f,id,freed){
 // The board bumps "cfg" in status on every saved change; each page then reloads /api/config.
 // Fields the user is editing are kept; the rest take the new values.
 const CF={ap_ssid:["apSsid","fSsid","Wi-Fi name"],device_name:["devName","fName","Device name"]};
-let cfg=null,cfgBusy=false;
+let cfg=null,cfgBusy=false,cfgOff="",savedAt=0;
 const cfgVal=k=>$(CF[k][0]).value.trim();
 const cfgDirty=k=>!!cfg&&cfgVal(k)!==cfg[k];
 function cfgErr(id,msg){const e=$(id).querySelector(".err");e.textContent=msg||"";e.hidden=!msg}
@@ -454,7 +454,7 @@ function cfgPaint(){
   $("apPass").disabled=$("pwShow").disabled=!on;
   $("cfgSave").disabled=!on||!any||cfgBusy;
   $("cfgSave").textContent=wifi?"Save and restart":"Save";
-  $("cfgNote").textContent=!on?"":wifi?"The caller restarts and both phones drop off its Wi-Fi for a few seconds. Rejoin with the new name and password.":"Changes here show on both phones straight away.";
+  $("cfgNote").textContent=!on?cfgOff:wifi?"The caller restarts and both phones drop off its Wi-Fi for a few seconds. Rejoin with the new name and password.":"Changes here show on both phones straight away.";
   $("cfgDefPw").hidden=!(cfg&&cfg.default_pass);
   if(cfg&&cfg.device_name)$("brand").textContent=cfg.device_name;
 }
@@ -462,7 +462,7 @@ async function loadConfig(){
   let c;
   try{c=await api("/api/config")}
   catch(e){
-    if(/501|not available/i.test(e.message)){cfg=null;$("cfgSync").textContent="";$("cfgNote").textContent="Settings come with the next firmware update.";cfgPaint();$("cfgNote").textContent="Settings come with the next firmware update."}
+    if(/501|not available/i.test(e.message)){cfg=null;cfgOff="Settings come with the next firmware update.";$("cfgSync").textContent="";cfgPaint()}
     return;
   }
   const first=!cfg,kept=[],changed=[];
@@ -489,7 +489,7 @@ $("cfgForm").onsubmit=async e=>{
   try{
     const r=await api("/api/config",p);
     $("apPass").value="";
-    if(r&&r.restart){restarting=Date.now();lastOk=Date.now();showOffline("Restarting…",`Saved. Rejoin ${p.ap_ssid} when your phone drops off. This page reconnects by itself.`)}
+    if(r&&r.restart){savedAt=restarting=Date.now();lastOk=Date.now();showOffline("Restarting…",`Saved. Rejoin ${p.ap_ssid} when your phone drops off. This page reconnects by itself.`)}
     else{toast("Saved");cfg=Object.assign({},cfg,{device_name:p.device_name,ap_ssid:p.ap_ssid});await loadConfig()}
   }catch(err){
     if(/changed on another phone|409/i.test(err.message)){toast("The other phone just changed these. Check them and save again.");await loadConfig()}
@@ -503,7 +503,7 @@ function onEvent(m){
   restarting=Date.now();lastOk=Date.now();
   const ss=m.ssid||"the caller";
   if(m.reason==="reset")showOffline("Wi-Fi settings reset","The caller is back to its factory Wi-Fi name and password. Rejoin "+ss+".");
-  else if(!cfgBusy)showOffline("Restarting…","Wi-Fi settings were changed on the other phone. Rejoin "+ss+" when your phone drops off.");
+  else if(!cfgBusy&&Date.now()-savedAt>5000)showOffline("Restarting…","Wi-Fi settings were changed on the other phone. Rejoin "+ss+" when your phone drops off.");
 }
 function showOffline(t,txt){$("offTitle").textContent=t;$("offText").textContent=txt;$("offline").hidden=false;offlineSticky=Date.now()}
 

@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import { chromium } from "playwright";
 import assert from "node:assert/strict";
 
-const PORT = 8094, URL = `http://localhost:${PORT}/`;
+const PORT = 8096, URL = `http://localhost:${PORT}/`;
 const server = spawn(process.execPath, ["mock/server.mjs", String(PORT)], { stdio: ["ignore", "pipe", "inherit"] });
 await new Promise((r) => server.stdout.once("data", r));
 
