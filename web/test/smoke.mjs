@@ -39,6 +39,23 @@ try {
     await page.reload();
     await page.waitForSelector(".call");
   });
+  await step("storage: card meter, then the no-card message and an \"SD card removed\" toast", async () => {
+    const api = (on) => page.request.post(`http://localhost:${PORT}/api/mock/sd`, { form: { on } });
+    await page.click('nav [data-go="settings"]');
+    await api("1");
+    await page.waitForFunction(() => /5120 KB used of 960 MB/.test(document.getElementById("fsText").textContent));
+    assert.equal(await page.locator("#noSd").isVisible(), false);
+    await api("0");
+    await page.waitForFunction(() => !document.getElementById("noSd").hidden);
+    assert.match(await page.locator("#noSd").innerText(), /No SD card: recordings unavailable/);
+    await page.waitForFunction(() => /SD card removed/.test(document.getElementById("toast").textContent));
+    await api("");  // back to a board that reports flash only (the page keeps old fields until a reload)
+    await page.reload();
+    await page.waitForSelector(".call");
+    await page.click('nav [data-go="settings"]');
+    await page.waitForFunction(() => document.getElementById("noSd").hidden && /KB used of 1408 KB/.test(document.getElementById("fsText").textContent));
+    await page.click('nav [data-go="calls"]');
+  });
   await step("speaker pill shows the connected speaker", async () => {
     await page.waitForFunction(() => document.getElementById("spkText").textContent === "Level Box Slim");
   });
