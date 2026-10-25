@@ -12,7 +12,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 FILTER="silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse,loudnorm=I=-14:TP=-1.0"
-# The six DeerCalls rows match PR #29 (make_deer_pack.sh): same ids, names and hints.
+# The six DeerCalls rows keep the ids, names and hints of the earlier deer-only script (PR #29).
 # pack|id|source (folder/file prefix)|display name (32 bytes max)|hint (47 bytes max)
 # A pack's calls are listed in this order. Ids are unique across all packs and the built-ins.
 CALLS="

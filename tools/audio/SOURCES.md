@@ -92,19 +92,60 @@ The API (v3) needs a free account key. Macaulay Library (Cornell) does not allow
 - WAV mono 16-bit 22.05 kHz ~ 44 KB/s: 11 clips ~ 2.9 MB, too big next to the firmware. Only use WAV for a few short clips.
 - MP3 needs a decoder on the ESP32 (e.g. libhelix in arduino-audio-tools / ESP32-A2DP).
 
-## Moose and deer packs (Eric's own MP3s, on the SD card)
-22 tracks Eric supplied from three folders, 0.7 to 36 s. Origin and licence are not in the files: personal use, never
-committed. Copy each folder's MP3s into its own folder under `tools/audio/local/`, then run
+## SD card packs: turkey (full length), moose, deer (Eric's own MP3s, 27 calls)
+Tracks Eric supplied from four folders (French names: femelle = cow or doe, rot mâle = bull or buck grunt). Origin and
+licence are not in the files: personal use, never committed. Copy each folder's MP3s into its local folder, then run
 `tools/audio/make_call_packs.sh`:
 
 | Eric's folder | Local folder | Goes to |
 |---|---|---|
+| TurkeyCalls | `local/` (same MP3s as the Dindon pack above) | turkey pack, full length |
 | MooseCalls | `local/moose-calls/` | 01 to 07 moose, 08 to 10 deer (by file name) |
 | MoosePreRutCalls | `local/moose-prerut/` | moose |
-| DeerCalls | `local/deer-calls/` | deer (Eric confirmed, 25 Oct) |
+| DeerCalls | `local/deer-calls/` | deer (Eric confirmed, 25 Oct; first packed as moose by mistake) |
 
 Same cleanup as the others (silence trim, -14 LUFS, mono, IMA ADPCM 22.05 kHz), but no 10 s cap, so the clips are kept
-whole. The ids, names, hints and order are in the script's table. Output: `tools/audio/data-sd/packs/moose/` (13 calls)
-and `tools/audio/data-sd/packs/deer/` (9 calls), about 1.9 MB together (git-ignored). Copy `packs/` to the SD card as
-`/packs/`. See `docs/features/F14-call-packs.md`.
+whole. Output: `tools/audio/data-sd/packs/<pack>/` (git-ignored), copied to the SD card as `/packs/`. "Rackling" is
+read as antler rattling; confirm by ear. See `docs/features/F14-call-packs.md`.
 
+#### Turkey pack: full-length Dindon tracks (group `pack`, next to the 10 s built-in versions), 5 clips, 1520 KB
+
+| id | Name | Source | Length | Hint |
+|---|---|---|---|---|
+| dindon_purr_full | Purr & clucks (full) | TurkeyCalls: 01_Dindon_Purr | 41.0 s | Whole track, soft and steady |
+| dindon_yelp_full | Yelp (full) | TurkeyCalls: 03_Dindon_Yelp1 | 16.6 s | Whole yelp track |
+| dindon_fast_yelp_full | Fast yelp (full) | TurkeyCalls: 04_Dindon_Yelp2 | 21.0 s | Whole fast yelp track |
+| dindon_kee_kee_full | Kee-kee run (full) | TurkeyCalls: 05_Dondon_KeeKee | 12.0 s | Whole kee-kee run track |
+| dindon_gobble_full | Gobble (full) | TurkeyCalls: 02_Dindon_Glou | 50.0 s | Whole gobble track, use with care |
+
+#### Moose pack (group `moose`), 13 clips, 977 KB
+
+| id | Name | Source | Length | Hint |
+|---|---|---|---|---|
+| moose_cow_1 | Cow call 1 | MooseCalls: 01-MOOSE COW 1 | 2.2 s | Short cow call |
+| moose_cow_2 | Cow call 2 | MooseCalls: 02-MOOSE COW 2 | 9.1 s | Cow call, medium length |
+| moose_cow_3 | Cow call 3 | MooseCalls: 03-MOOSE COW 3 | 7.7 s | Cow call, medium length |
+| moose_cow_4 | Cow call 4 | MooseCalls: 04-MOOSE COW 4 | 6.2 s | Cow call, medium length |
+| moose_cow_5 | Cow call 5 | MooseCalls: 05-MOOSE COW 5 | 20.3 s | Long cow call series |
+| moose_cow_heat_long | Cow in heat (long) | MoosePreRutCalls: 3- Femelle en chaleur par Dan Lavoie Guide | 30.0 s | Long cow-in-heat call, pulls a bull in |
+| moose_cow_unready | Cow not ready | MoosePreRutCalls: 2- Femelle non receptive par Dan Lavoie Guide | 5.7 s | Cow not yet receptive, pre-rut |
+| moose_young_bull | Young bull | MoosePreRutCalls: 4- Jeune buck  | 1.7 s | Young bull grunting |
+| moose_mature_bull | Mature bull | MoosePreRutCalls: 5- Buck mature  par Dan Lavoie Guide(1).mp3t | 2.2 s | Mature bull grunting |
+| moose_aggr_bull | Aggressive bull | MoosePreRutCalls: 6- Buck  agressif par Dan Lavoie Guide(1) | 2.9 s | Aggressive bull, challenges a rival |
+| moose_big_bull | Big bull | MooseCalls: 06-MOOSE BIG BULL | 0.5 s | Deep grunt of a big bull |
+| moose_snorting | Snorting | MooseCalls: 07-MOOSE SNORTING | 0.9 s | Bull snorting |
+| moose_snort_prerut | Pre-rut snort | MoosePreRutCalls: 1- Renâclement par Dan Lavoie Guide | 0.7 s | Pre-rut snort |
+
+#### Deer pack (group `deer`), 9 clips, 963 KB
+
+| id | Name | Source | Length | Hint |
+|---|---|---|---|---|
+| deer_doe_estrus | Doe in estrus | DeerCalls: 01_Femelle chaleur | 23.9 s | Doe bleat in heat, draws a buck in |
+| deer_doe_bleat | Doe bleat | DeerCalls: 02_Plaint femelle | 19.9 s | Plaintive doe call, calm, all day |
+| deer_doe | Doe call | MooseCalls: 08-DEER DOE | 0.9 s | Short doe bleat |
+| deer_tending_grunt | Tending grunt | DeerCalls: 03_Rot Mâle(Tending) | 6.4 s | Buck grunting while he tends a doe |
+| deer_trail_grunt | Trailing grunt | DeerCalls: 06_Rot Mâle (trail) | 3.9 s | Buck following a doe's trail |
+| deer_buck_grunt | Buck grunt | DeerCalls: 05_Rot Mâle | 17.4 s | Rut grunting, long series |
+| deer_grunt_1 | Short grunt | MooseCalls: 09-DEER ROT 1 | 0.5 s | Single short buck grunt |
+| deer_grunt_2 | Grunt series | MooseCalls: 10-DEER ROT 2 | 2.2 s | Short series of buck grunts |
+| deer_rattle | Antler rattle | DeerCalls: 04_Rackling | 13.7 s | Rattling antlers, mimics two bucks sparring |
