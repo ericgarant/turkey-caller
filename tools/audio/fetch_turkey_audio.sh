@@ -64,6 +64,9 @@ convert() {
 }
 
 mkdir -p raw data
+# Start data/ empty so a clip dropped from the lists above (e.g. kee_kee_run) is not copied to the board again.
+# The originals stay cached in raw/ and local/, so this only costs a re-convert.
+rm -f data/*.wav data/*.mp3
 for line in $CLIPS; do
   name="${line%%|*}"; src="${line##*|}"
   fetch "$BASE/$src" "raw/$src" || { echo "!! failed: $src ($BASE/$src)"; continue; }
