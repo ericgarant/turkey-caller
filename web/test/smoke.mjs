@@ -18,10 +18,10 @@ try {
 
   const step = async (name, fn) => { await fn(); console.log("ok -", name); };
 
-  await step("shows the 12 calls in three groups", async () => {
+  await step("shows the 16 calls in four groups", async () => {
     await page.waitForSelector(".call");
-    assert.equal(await page.locator(".call").count(), 12);
-    assert.deepEqual(await page.locator("#groups h2").allTextContents(), ["Soft calls", "Louder calls", "Use with care"]);
+    assert.equal(await page.locator(".call").count(), 16);
+    assert.deepEqual(await page.locator("#groups h2").allTextContents(), ["Soft calls", "Louder calls", "Use with care", "Dindon pack"]);
   });
   await step("speaker pill shows the connected speaker", async () => {
     await page.waitForFunction(() => document.getElementById("spkText").textContent === "Level Box Slim");
@@ -37,6 +37,14 @@ try {
     await page.click('.call[data-id="cutting"]');
     await page.waitForSelector('.call.on[data-id="cutting"]');
     await page.click('.call[data-id="cutting"]');
+    await page.waitForFunction(() => !document.querySelector(".call.on"));
+  });
+  await step("a tap on a sleeping speaker says it is waking it, then plays", async () => {
+    await page.evaluate(() => fetch("/api/mock/speaker", { method: "POST", body: new URLSearchParams({ mode: "asleep" }) }));
+    await page.click('.call[data-id="purr"]');
+    await page.waitForFunction(() => /Waking the speaker/.test(document.getElementById("toast").textContent));
+    await page.waitForSelector('.call.on[data-id="purr"]', { timeout: 6000 });
+    await page.click("#stopBtn");
     await page.waitForFunction(() => !document.querySelector(".call.on"));
   });
   await step("volume buttons change the board's volume", async () => {
@@ -57,13 +65,13 @@ try {
     await page.click('nav [data-go="speaker"]');
     await page.click("#scanBtn");
     await page.waitForFunction(() => document.querySelectorAll("#devList li .mono").length === 4, null, { timeout: 12000 });
-    assert.equal(await page.locator("#devList [data-i]").count(), 3, "nameless speaker has no Use button");
+    assert.equal(await page.locator("#devList [data-i]").count(), 4, "a nameless speaker is usable by address (F06)");
     await page.click('#devList [data-i="0"]');
     await page.waitForFunction(() => document.getElementById("spkText").textContent === "Level Box Slim", null, { timeout: 8000 });
   });
   await step("settings show sounds, storage and Wi-Fi name", async () => {
     await page.click('nav [data-go="settings"]');
-    assert.equal(await page.locator("#sndList li").count(), 12);
+    assert.equal(await page.locator("#sndList li").count(), 16);
     assert.match(await page.textContent("#fsText"), /used of 1408 KB/);
     assert.equal(await page.inputValue("#apSsid"), "TurkeyCaller");
   });

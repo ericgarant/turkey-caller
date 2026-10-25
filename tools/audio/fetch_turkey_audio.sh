@@ -2,6 +2,7 @@
 # Downloads wild turkey call clips and converts them to small ESP32-friendly files.
 # Run on your Mac:  brew install ffmpeg   then   cd tools/audio && ./fetch_turkey_audio.sh
 # Output: ./raw (originals) and ./data (converted, ready for the ESP32 LittleFS image)
+# Dindon pack: put Eric's five "Dindon" MP3s in ./local first (any of their file names work, see LOCAL below).
 #
 # FORMAT: adpcm (default: mono IMA ADPCM WAV, 22.05 kHz, ~11 KB/s; what the firmware plays),
 #         wav (mono 16-bit PCM 22.05 kHz, ~44 KB/s; also plays) or mp3 (64 kbps, for listening only)
@@ -18,6 +19,7 @@ cd "$(dirname "$0")"   # always write raw/ and data/ next to this script (git-ig
 BASE="https://www.dnr.sc.gov/wildlife/turkey/sound"
 
 # name|source file   (audio courtesy National Wild Turkey Federation, via SC DNR)
+# Kee_Kee_Run.mp3 was dropped to make room for the Dindon pack (it has its own kee-kee run, dindon_kee_kee).
 CLIPS="
 cluck|Cluck.mp3
 putt|Putt.mp3
@@ -26,7 +28,6 @@ plain_yelp|Yelp_Hen.mp3
 cutting|Cutting_Hen.mp3
 assembly_yelp|Assembly_Call.mp3
 fly_down_cackle|Fly_Down_Cackle.mp3
-kee_kee_run|Kee_Kee_Run.mp3
 purr|Purr.mp3
 cluck_purr|Cluck_Purr.mp3
 gobble|Gobbling.mp3
@@ -53,10 +54,13 @@ fetch() {
   rm -f "$2.part"; return 1
 }
 
-# convert RAWFILE NAME [START]: on failure delete the raw file so the next run downloads it again
+# convert RAWFILE NAME [START] [LENGTH]: LENGTH cuts the input (before silence trimming), else MAXSEC caps
+# the output. On failure delete the raw file so the next run downloads it again
 convert() {
-  ffmpeg -loglevel error -y -ss "${3:-0}" -i "$1" -af "$FILTER" -t "$MAXSEC" "${OUT[@]}" "data/$2.$EXT" \
-    || { echo "!! convert failed: $1"; rm -f "$1"; return 1; }
+  local cut=()
+  [ -n "${4:-}" ] && cut=(-t "$4")
+  ffmpeg -nostdin -loglevel error -y -ss "${3:-0}" ${cut[@]+"${cut[@]}"} -i "$1" -af "$FILTER" -t "$MAXSEC" "${OUT[@]}" "data/$2.$EXT" \
+    || { echo "!! convert failed: $1"; case "$1" in raw/*) rm -f "$1" ;; esac; return 1; }
 }
 
 mkdir -p raw data
@@ -73,6 +77,24 @@ if fetch "https://xeno-canto.org/$WHINE_XC/download" "$wsrc"; then
 else
   echo "!! failed: $wsrc. Download it in a browser from https://xeno-canto.org/$WHINE_XC and save it as tools/audio/$wsrc"
 fi
+
+# Dindon pack: Eric's own MP3s (album "DINDON", 2014), not downloadable, so they are read from ./local
+# (git-ignored like raw/ and data/). Each track repeats its call several times with gaps; one take is cut.
+# id|file name pattern|start s|length s   (cut points found by silence gaps, see SOURCES.md)
+LOCAL="
+dindon_purr|*[Pp]urr*.mp3|2.9|3.9
+dindon_gobble|*[Gg]lou*.mp3|5.0|3.2
+dindon_yelp|*[Yy]elp1*.mp3|6.2|3.3
+dindon_fast_yelp|*[Yy]elp2*.mp3|2.5|3.2
+dindon_kee_kee|*[Kk]ee[Kk]ee*.mp3|2.55|3.9
+"
+mkdir -p local
+while IFS='|' read -r name pat start len; do
+  [ -n "$name" ] || continue
+  src=$(find local -maxdepth 1 -name "$pat" | head -n 1)
+  if [ -z "$src" ]; then echo "!! missing: local/$pat (copy the Dindon MP3s into tools/audio/local)"; continue; fi
+  convert "$src" "$name" "$start" "$len" || true
+done <<<"$LOCAL"
 
 echo; printf "%-20s %8s %8s\n" file seconds bytes
 total=0; count=0

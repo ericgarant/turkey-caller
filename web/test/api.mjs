@@ -37,15 +37,16 @@ try {
   await step("status has every field the page reads", async () => {
     const s = await get("/api/status");
     for (const k of ["bt", "speaker", "playing", "current", "loop", "repeat", "pos_ms", "len_ms", "volume", "heap", "minHeap",
-      "fsFree", "fsTotal", "clients", "uptime", "underruns", "version"]) assert.ok(k in s, `missing ${k}`);
+      "fsFree", "fsTotal", "clients", "uptime", "underruns", "version", "stream", "error"]) assert.ok(k in s, `missing ${k}`);
     assert.ok(["idle", "searching", "connecting", "connected"].includes(s.bt));
+    assert.ok(["ready", "waking", "suspended", "down"].includes(s.stream));
   });
-  await step("12 sounds, each with id, name, group, bytes, ms", async () => {
+  await step("16 sounds (11 + the Dindon pack), each with id, name, group, bytes, ms", async () => {
     const list = await get("/api/sounds");
-    assert.equal(list.length, 12);
+    assert.equal(list.length, 16);
     for (const s of list) {
       assert.match(s.id, /^[a-z0-9_]{1,24}$/);
-      assert.ok(["soft", "loud", "care"].includes(s.group));
+      assert.ok(["soft", "loud", "care", "pack"].includes(s.group));
       assert.ok(s.bytes > 0 && s.ms > 0);
     }
   });
@@ -97,10 +98,10 @@ try {
     assert.equal((await upload("Bad Name.wav", 4000)).code, 400);
     assert.equal((await upload("big.wav", 2 * 1024 * 1024)).code, 413);
     assert.equal((await upload("owl_hoot.wav", 4000)).code, 200);
-    assert.equal((await get("/api/sounds")).length, 13);
+    assert.equal((await get("/api/sounds")).length, 17);
     assert.equal((await post("/api/sounds/delete", { id: "owl_hoot" })).code, 200);
     assert.equal((await post("/api/sounds/delete", { id: "owl_hoot" })).code, 404);
-    assert.equal((await get("/api/sounds")).length, 12);
+    assert.equal((await get("/api/sounds")).length, 16);
   }, { risky: true });
   await step("config validation: short password and long name refused, password never returned", async () => {
     assert.equal((await post("/api/config", { ap_ssid: "Turk", ap_pass: "short" })).code, 400);
@@ -126,13 +127,43 @@ try {
     assert.equal((await get("/api/status")).cfg, c2.rev);
     await post("/api/config", { ap_ssid: c.ap_ssid, device_name: c.device_name, rev: c2.rev });
   }, { risky: true });
-  await step("forget stops playback; play without a speaker is 409; connect needs a name", async () => {
+  if (onMock) {
+    await step("a tap on a sleeping speaker answers 202, wakes it, then plays (F07)", async () => {
+      await post("/api/mock/speaker", { mode: "asleep" });
+      const r = await post("/api/play", { id: "cluck", loop: "0" });
+      assert.deepEqual([r.code, r.body.waking], [202, true]);
+      assert.equal((await get("/api/status")).stream, "waking");
+      await sleep(1300);
+      const s = await get("/api/status");
+      assert.deepEqual([s.stream, s.playing, s.current], ["ready", true, "cluck"]);
+      await post("/api/stop");
+    });
+    await step("Stop while waking cancels the call", async () => {
+      await post("/api/mock/speaker", { mode: "asleep" });
+      assert.equal((await post("/api/play", { id: "purr" })).code, 202);
+      await post("/api/stop");
+      await sleep(1300);
+      const s = await get("/api/status");
+      assert.deepEqual([s.playing, s.stream === "waking"], [false, false]);
+      await post("/api/mock/speaker", { mode: "on" });
+    });
+    await step("a speaker that is off: 202, then \"Speaker did not answer\" within 8 s", async () => {
+      await post("/api/mock/speaker", { mode: "off" });
+      assert.equal((await post("/api/play", { id: "cluck" })).code, 202);
+      await sleep(8300);
+      const s = await get("/api/status");
+      assert.deepEqual([s.playing, s.error], [false, "Speaker did not answer"]);
+      await post("/api/mock/speaker", { mode: "on" });
+    });
+  }
+  await step("forget stops playback; play without a speaker is 409; connect by address", async () => {
     await post("/api/play", { id: "cluck", loop: "1" });
     await post("/api/bt/forget");
     const s = await get("/api/status");
     assert.deepEqual([s.playing, s.bt], [false, "idle"]);
     assert.equal((await post("/api/play", { id: "cluck" })).code, 409);
-    assert.equal((await post("/api/bt/connect", { addr: "5C:49:7D:1A:20:8E", name: "" })).code, 400);
+    assert.equal((await post("/api/bt/connect", { addr: "", name: "" })).code, 400);
+    assert.equal((await post("/api/bt/connect", { addr: "5C:49:7D", name: "Level Box Slim" })).code, 400);
     assert.equal((await post("/api/bt/connect", { addr: "5C:49:7D:1A:20:8E", name: "Level Box Slim" })).code, 200);
     assert.equal((await get("/api/status")).bt, "connecting");
     await sleep(2800);

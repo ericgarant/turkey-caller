@@ -125,7 +125,7 @@ void begin() {
         if (!probe(id, s)) return;  // missing or broken: not listed
         if (name[0]) strlcpy(s.name, name, sizeof(s.name));
         else defaultName(id, s.name, sizeof(s.name));
-        if (!strcmp(group, "soft") || !strcmp(group, "loud") || !strcmp(group, "care")) strlcpy(s.group, group, sizeof(s.group));
+        if (!strcmp(group, "soft") || !strcmp(group, "loud") || !strcmp(group, "care") || !strcmp(group, "pack")) strlcpy(s.group, group, sizeof(s.group));
         found[count++] = s;
       });
       free(text);

@@ -79,7 +79,7 @@ try {
   await step("busy window while the page loads: the calls still appear", async () => {
     await busy({ count: 3 });
     const c = await open();
-    assert.equal(await c.locator(".call").count(), 12);
+    assert.equal(await c.locator(".call").count(), 16);
     await c.context().close();
   });
   await step("busy for longer than the page waits: it says so, nothing plays, and the next tap works", async () => {
