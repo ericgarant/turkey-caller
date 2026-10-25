@@ -35,6 +35,7 @@ const st = { bt: "connected", speaker: "Level Box Slim", stream: "ready", error:
 // suspended, a tap wakes it in 1 s. Off: saved but out of reach, a tap gives up after 8 s.
 let speakerMode = "on", wakeTimer = null;
 let playStart = 0, playTimer = null, scanning = false, devices = [];
+let busy = 0, busyUntil = 0;  // test hook (mock only): POST /api/mock/busy count=N (next N API calls) or ms=T (every API call for T ms) answers 503, like the board's busy window
 const boot = Date.now();
 
 function status() {
@@ -138,6 +139,9 @@ const server = http.createServer(async (req, res) => {
   const route = req.method + " " + url.pathname;
   if (process.env.MOCK_LOG) console.log(route, JSON.stringify(p));
 
+  if (route === "POST /api/mock/busy") { busy = +p.count || 0; busyUntil = Date.now() + (+p.ms || 0); return ok(res); }
+  if (url.pathname.startsWith("/api/") && (busy > 0 || Date.now() < busyUntil)) { if (busy > 0) busy--; return fail(res, 503, "busy, try again"); }
+
   switch (route) {
     case "GET /": case "GET /index.html":
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
@@ -202,7 +206,7 @@ const server = http.createServer(async (req, res) => {
 
 server.on("upgrade", (req, sock) => {
   if (req.url !== "/ws") return sock.destroy();
-  const accept = crypto.createHash("sha1").update(req.headers["sec-websocket-key"] + "258EAFA5-E914-47DA-95CA-C5AB0DC11B85").digest("base64");
+  const accept = crypto.createHash("sha1").update(req.headers["sec-websocket-key"] + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest("base64");
   sock.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
   sockets.add(sock);
   let pending = Buffer.alloc(0);
