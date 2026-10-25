@@ -56,7 +56,7 @@ try {
     const list = await get("/api/sounds");
     const moose = list.filter((s) => s.animal === "moose");
     assert.equal(moose.length, 6);
-    assert.ok(moose.every((s) => s.group === "moose" && s.ms > 0 && s.bytes > 0));
+    assert.ok(moose.every((s) => s.group === "moose" && s.hint && s.ms > 0 && s.bytes > 0));
     assert.ok(moose.some((s) => s.ms > 10000), "pack clips are not capped at 10 s");
     await post("/api/mock/pack", { name: "moose", on: "0" });
     assert.equal((await get("/api/sounds")).length, 16);

@@ -17,19 +17,23 @@ moose_rake|04_|Antler rake|Raking brush and trees, challenges a bull
 moose_bull_grunt|05_|Bull grunt|Bull rut grunting, long series
 moose_bull_trail|06_|Trailing grunt|Bull following a cow's trail
 "
-rm -rf data-sd && mkdir -p "$OUT_DIR"
-json="["; sep=""
+rm -rf "$OUT_DIR" && mkdir -p "$OUT_DIR"   # only this pack: other packs under data-sd/packs stay
+ROWS="$(mktemp)"; trap 'rm -f "$ROWS"' EXIT
 while IFS='|' read -r id pre name hint; do
   [ -n "$id" ] || continue
   src=$(find local/moose -maxdepth 1 -name "${pre}*.mp3" | head -n 1)
   if [ -z "$src" ]; then echo "!! missing: local/moose/${pre}*.mp3"; continue; fi
   ffmpeg -nostdin -loglevel error -y -i "$src" -af "$FILTER" -ac 1 -ar 22050 -c:a adpcm_ima_wav "$OUT_DIR/$id.wav" \
-    || { echo "!! convert failed: $src"; continue; }
-  json="$json$sep
-  {\"id\": \"$id\", \"name\": \"$name\", \"animal\": \"moose\", \"group\": \"moose\", \"hint\": \"$hint\"}"
-  sep=","
+    || { echo "!! convert failed: $src"; rm -f "$OUT_DIR/$id.wav"; continue; }
+  printf '%s|%s|%s\n' "$id" "$name" "$hint" >>"$ROWS"
 done <<<"$PACK"
-printf '%s\n]\n' "$json" >"$OUT_DIR/index.json"
+# The index lists only clips that converted; json.dumps escapes quotes and backslashes in names and hints.
+python3 - "$ROWS" "$OUT_DIR/index.json" <<'PY'
+import json, sys
+rows = [l.rstrip("\n").split("|", 2) for l in open(sys.argv[1], encoding="utf-8") if l.strip()]
+out = [{"id": i, "name": n, "animal": "moose", "group": "moose", "hint": h} for i, n, h in rows]
+open(sys.argv[2], "w", encoding="utf-8").write(json.dumps(out, indent=2, ensure_ascii=False) + "\n")
+PY
 echo; printf "%-20s %8s %8s\n" file seconds bytes
 total=0
 for f in "$OUT_DIR"/*.wav; do

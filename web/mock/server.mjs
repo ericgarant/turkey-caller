@@ -28,9 +28,10 @@ const sounds = [
 // Call packs live on the SD card (F14). Off at start, like a board with no card; the test hook
 // POST /api/mock/pack name=moose on=1|0 inserts or pulls one. Lengths are the real moose clips.
 const PACKS = {
-  moose: [["moose_cow_heat", "Cow in heat", 23900], ["moose_cow_moan", "Cow moan", 19900], ["moose_bull_tending", "Tending grunt", 6400],
-    ["moose_rake", "Antler rake", 13700], ["moose_bull_grunt", "Bull grunt", 17400], ["moose_bull_trail", "Trailing grunt", 3900]]
-    .map(([id, name, ms]) => ({ id, name, animal: "moose", group: "moose", ms, bytes: ms * BYTES_PER_MS })),
+  moose: [["moose_cow_heat", "Cow in heat", "Cow calling for a bull, long and loud", 23900], ["moose_cow_moan", "Cow moan", "Plaintive cow call, draws a bull in", 19900],
+    ["moose_bull_tending", "Tending grunt", "Bull grunting while he tends a cow", 6400], ["moose_rake", "Antler rake", "Raking brush and trees, challenges a bull", 13700],
+    ["moose_bull_grunt", "Bull grunt", "Bull rut grunting, long series", 17400], ["moose_bull_trail", "Trailing grunt", "Bull following a cow's trail", 3900]]
+    .map(([id, name, hint, ms]) => ({ id, name, animal: "moose", group: "moose", hint, ms, bytes: ms * BYTES_PER_MS })),
 };
 
 const NEARBY = [

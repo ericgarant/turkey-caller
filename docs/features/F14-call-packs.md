@@ -6,11 +6,12 @@
 
 ## Catalog contract
 
-- Every sound has an `animal`: `turkey`, `moose` or `deer`. Missing means `turkey`. `GET /api/sounds` returns `[{id, name, animal, group, bytes, ms}]`.
-- A **pack** is a folder on the SD card: `/packs/<pack>/index.json` plus that pack's WAVs (mono IMA ADPCM, 22.05 kHz, same format as F02). The index has the same schema as the flash `index.json`, plus `animal`, and an optional `hint` shown on the button.
+- Every sound has an `animal`: `turkey`, `moose` or `deer`. Missing means `turkey`. `GET /api/sounds` returns `[{id, name, animal, group, hint, bytes, ms}]` (`hint` optional, empty if the index has none).
+- A **pack** is a folder on the SD card: `/packs/<pack>/index.json` plus that pack's WAVs (mono IMA ADPCM, 22.05 kHz, same format as F02). The index has the same schema as the flash `index.json`, plus `animal`, and an optional `hint` (up to 47 bytes) shown on the button.
 - Merge order: built-ins (flash), then packs (alphabetical by folder), then uploads. Uploads stay in `/sounds/` and only show under "Your recordings"; packs never mix with them.
 - **One id namespace** across built-ins, packs and uploads. An upload that collides with a built-in or pack id gets 409. A duplicate id inside a pack is skipped, logged on serial, first one wins.
-- Pack clips are not capped at 10 s; the firmware accepts up to 60 s each. `kMaxSounds` goes from 40 to 64 (the array may live in PSRAM). The SD index read buffer stays at 4 KB or less (F10).
+- Pack clips are not capped at 10 s; the firmware accepts up to 60 s each. `kMaxSounds` goes from 40 to 64 and the `Sound` array lives in PSRAM. `Sound` gains `animal[8]` and `hint[48]`, and `group` grows past 6 bytes (`moose`, `deer` need room); `library.cpp` accepts the `moose` and `deer` groups. The SD index read buffer stays at 4 KB or less (F10).
+- A pack lists **only** the clips named in its `index.json` (unlike flash, there is no "Other sounds" fallback). A WAV without an entry is ignored.
 - No card, or an unreadable card: packs and uploads do not list. A pack with a missing file lists the other clips. Packs are read-only on the board; add or remove them from a Mac.
 
 ## Page
@@ -21,15 +22,15 @@
 
 ## Moose pack (6 clips)
 
-Made from Eric's six MP3s with `tools/audio/make_moose_pack.sh` (never committed, like the Dindon clips). Output goes to `tools/audio/data-sd/packs/moose/`; copy `packs/` onto the card.
+The script (`make_moose_pack.sh`) is the source of truth for names and hints; the table below mirrors it. Made from Eric's six MP3s with `tools/audio/make_moose_pack.sh` (never committed, like the Dindon clips). Output goes to `tools/audio/data-sd/packs/moose/`; copy `packs/` onto the card.
 
 | id | Name | Source | Length | Hint |
 |---|---|---|---|---|
-| moose_cow_heat | Cow in heat | 01 Femelle chaleur | 23.9 s | Cow calling for a bull |
+| moose_cow_heat | Cow in heat | 01 Femelle chaleur | 23.9 s | Cow calling for a bull, long and loud |
 | moose_cow_moan | Cow moan | 02 Plainte femelle | 19.9 s | Plaintive cow call, draws a bull in |
 | moose_bull_tending | Tending grunt | 03 Rot Mâle Tending | 6.4 s | Bull grunting while he tends a cow |
-| moose_rake | Antler rake | 04 Rackling | 13.7 s | Raking brush and trees |
-| moose_bull_grunt | Bull grunt | 05 Rot Mâle | 17.4 s | Bull rut grunting |
+| moose_rake | Antler rake | 04 Rackling | 13.7 s | Raking brush and trees, challenges a bull |
+| moose_bull_grunt | Bull grunt | 05 Rot Mâle | 17.4 s | Bull rut grunting, long series |
 | moose_bull_trail | Trailing grunt | 06 Rot Mâle trail | 3.9 s | Bull following a cow's trail |
 
 Total about 920 KB on the card. Deer adds a folder `/packs/deer/` and a script in the same shape.
