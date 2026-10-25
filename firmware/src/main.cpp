@@ -6,6 +6,7 @@
 #include "heapmon.h"
 #include "library.h"
 #include "player.h"
+#include "sdcard.h"
 #include "settings.h"
 #include "version.h"
 #include "web.h"
@@ -26,8 +27,9 @@ void setup() {
   if (!LittleFS.begin(true)) Serial.println("LittleFS mount failed");
   Serial.printf("LittleFS: %u of %u bytes used\n", (unsigned)LittleFS.usedBytes(), (unsigned)LittleFS.totalBytes());
 
+  sdcard::begin();    // F12: recordings on the SD card (WROVER-E); none on the WROOM board
   settings::begin();  // Wi-Fi name, password, device name (F05); before Bluetooth and Wi-Fi use them
-  library::begin();  // sound list from /sounds/index.json and the clip headers
+  library::begin();  // sound list: built-ins from /sounds/index.json, then the card's recordings
   heapLog("boot");
   player::begin();
   heapLog("player");
@@ -50,11 +52,11 @@ void loop() {
     last = millis();
     player::Stats p = player::stats();
     static uint32_t lastFills = 0;
-    Serial.printf("[%lus] clients=%d req=%d bt=%s playing=%s plays=%u underruns=%u buf=%u fills=+%u heap=%u min=%u low=%u block=%u\n",
+    Serial.printf("[%lus] clients=%d req=%d bt=%s playing=%s plays=%u underruns=%u buf=%u fills=+%u heap=%u min=%u low=%u block=%u psram=%u\n",
                   (unsigned long)(millis() / 1000), web::clients(), web::requestsInFlight(), bt::state(), p.playing ? p.current : "-",
                   (unsigned)p.plays, (unsigned)p.underruns, (unsigned)p.bufferedBytes,
                   (unsigned)(p.fills - lastFills), (unsigned)ESP.getFreeHeap(),
-                  (unsigned)heapmon::minEver(), (unsigned)heapmon::lowSince(), (unsigned)ESP.getMaxAllocHeap());
+                  (unsigned)heapmon::minEver(), (unsigned)heapmon::lowSince(), (unsigned)ESP.getMaxAllocHeap(), (unsigned)ESP.getFreePsram());
     lastFills = p.fills;
   }
   delay(5);
