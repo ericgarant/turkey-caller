@@ -202,6 +202,7 @@ const server = http.createServer(async (req, res) => {
       const bytes = (v) => Buffer.byteLength(v);  // like the board: limits in UTF-8 bytes
       if (!ssid || bytes(ssid) > 32) return fail(res, 400, "Wi-Fi name must be 1 to 32 characters");
       if (!name || bytes(name) > 24) return fail(res, 400, "device name must be 1 to 24 characters");
+      if (pass && /[^\x20-\x7e]/.test(pass)) return fail(res, 400, "password must be printable ASCII");
       if (pass && (bytes(pass) < 8 || bytes(pass) > 63)) return fail(res, 400, "password must be 8 to 63 characters");
       const wifi = ssid !== cfg.ap_ssid || (pass && pass !== cfg.ap_pass);
       Object.assign(cfg, { ap_ssid: ssid, device_name: name }, pass ? { ap_pass: pass } : {});

@@ -262,7 +262,8 @@ function onStatus(s){
   if(s.bt&&!BT_TEXT[s.bt])s.bt=/connect/i.test(s.bt)&&!/not|dis/i.test(s.bt)?"connected":/search|scan/i.test(s.bt)?"searching":"idle";
   if(s.repeat!=null)$("loopSw").checked=!!s.repeat;  // Repeat is kept on the board and shared by every phone
   if(s.error&&s.error!==st.error)toast(s.error);  // e.g. "Speaker did not answer" after a wake
-  const cfgMoved=s.cfg!=null&&cfg&&s.cfg!==cfg.rev;
+  // During our own save, rev+1 is our save (if the other phone saved instead, our POST gets 409 and reloads)
+  const cfgMoved=s.cfg!=null&&cfg&&s.cfg!==cfg.rev&&!(cfgBusy&&s.cfg===cfg.rev+1);
   st=Object.assign(st,s);stAt=Date.now();lastOk=Date.now();
   if(restarting&&Date.now()-restarting>4000){restarting=0;loadSounds();loadConfig()}
   else if(cfgMoved)loadConfig();
@@ -455,7 +456,8 @@ function cfgCheck(){  // returns an error-free POST body, or null
   const B=v=>new TextEncoder().encode(v).length,two=" (accented letters count as 2)";
   if(!p.ap_ssid)bad("fSsid","1 to 32 characters");else if(B(p.ap_ssid)>32)bad("fSsid","Too long: 32 characters at most"+two);
   if(!p.device_name)bad("fName","1 to 24 characters");else if(B(p.device_name)>24)bad("fName","Too long: 24 characters at most"+two);
-  if(pass&&(B(pass)<8||B(pass)>63))bad("fPass","8 to 63 characters"+(B(pass)>pass.length?two:""));
+  if(pass&&/[^\x20-\x7e]/.test(pass))bad("fPass","Letters, digits and symbols only: no accents or emoji");
+  else if(pass&&(pass.length<8||pass.length>63))bad("fPass","8 to 63 characters");
   if(pass)p.ap_pass=pass;
   return ok?p:null;
 }
@@ -501,9 +503,11 @@ $("cfgForm").onsubmit=async e=>{
     const r=await api("/api/config",p);
     $("apPass").value="";
     if(r&&r.restart){savedAt=restarting=Date.now();lastOk=Date.now();showOffline("Restarting…",`Saved. Rejoin ${p.ap_ssid} when your phone drops off. This page reconnects by itself.`)}
-    // No GET here: the board pushes the new cfg rev and that reloads every phone, this one
-    // included. A second GET from the saving phone dipped the heap under 40 KB (issue #8).
-    else{toast("Saved");cfg=Object.assign({},cfg,{device_name:p.device_name,ap_ssid:p.ap_ssid});cfgPaint()}
+    // No GET here (an extra one dipped the heap under 40 KB, issue #8). The save moved the
+    // board's rev by one, so take that as ours: the board's push then needs no reload here,
+    // and a second save works even if that push was missed. If the other phone also saved,
+    // the push carries a different rev and this page reloads.
+    else{toast("Saved");cfg=Object.assign({},cfg,{device_name:p.device_name,ap_ssid:p.ap_ssid,rev:cfg.rev+1});cfgPaint()}
   }catch(err){
     if(/changed on another phone|409/i.test(err.message)){toast("The other phone just changed these. Check them and save again.");await loadConfig()}
     else toast(why(err));
