@@ -9,6 +9,7 @@
 #include "heapmon.h"
 #include "library.h"
 #include "player.h"
+#include "sdcard.h"
 #include "settings.h"
 #include "version.h"
 #include "web_page.h"
@@ -85,6 +86,12 @@ bool lowMemory(AsyncWebServerRequest *req) {
   return true;
 }
 
+// The page shows `error` once as a toast: a speaker wake failure (#14) or a pulled card (F12).
+String lastError() {
+  String e = bt::error();
+  return e.length() ? e : player::error();
+}
+
 // The page knows four states; "disconnecting" is brief and on the way to a reconnect.
 const char *btState() {
   const char *s = bt::state();
@@ -94,7 +101,7 @@ const char *btState() {
 String statusJson() {
   player::Stats p = player::stats();
   String j;
-  j.reserve(480);
+  j.reserve(560);
   j += "{\"bt\":\"";
   j += btState();
   j += "\",\"speaker\":";
@@ -102,7 +109,7 @@ String statusJson() {
   j += ",\"stream\":\"";
   j += bt::stream();
   j += "\",\"error\":";
-  jsonStr(j, bt::error().c_str());
+  jsonStr(j, lastError().c_str());
   j += ",\"playing\":";
   j += p.playing ? "true" : "false";
   j += ",\"current\":";
@@ -119,6 +126,10 @@ String statusJson() {
   j += ",\"maxBlock\":" + String(ESP.getMaxAllocHeap());
   j += ",\"fsFree\":" + String(library::fsFree());
   j += ",\"fsTotal\":" + String(library::fsTotal());
+  // F12: the SD card (where uploads go), 0 and 0 with no card; PSRAM is 0 on the WROOM board.
+  j += ",\"sdFree\":" + String(sdcard::freeBytes());
+  j += ",\"sdTotal\":" + String(sdcard::totalBytes());
+  j += ",\"psramFree\":" + String(ESP.getFreePsram());
   j += ",\"clients\":" + String(WiFi.softAPgetStationNum());
   j += ",\"uptime\":" + String(millis() / 1000);
   j += ",\"plays\":" + String(p.plays);
@@ -410,7 +421,7 @@ Shown shownNow() {
   strlcpy(s.bt, btState(), sizeof(s.bt));
   strlcpy(s.current, p.current, sizeof(s.current));
   strlcpy(s.stream, bt::stream(), sizeof(s.stream));
-  s.errorLen = (uint8_t)bt::error().length();
+  s.errorLen = (uint8_t)lastError().length();
   s.playing = p.playing;
   s.loop = p.loop;
   s.volume = p.volume;

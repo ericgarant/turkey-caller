@@ -2,12 +2,13 @@
 
 #include <LittleFS.h>
 
+#include "sdcard.h"
 #include "wav.h"
 
 namespace library {
 namespace {
 
-constexpr size_t kMaxSounds = 40;
+constexpr size_t kMaxSounds = 64;  // built-ins plus recordings on the card
 constexpr size_t kMaxIndexBytes = 4096;
 
 Sound *sounds = nullptr;  // exactly `n` entries on the heap: a fixed 40-entry table cost ~3 KB of RAM
@@ -58,10 +59,10 @@ void parseIndex(const char *p, Fn fn) {
 }
 
 // Reads a clip's header. Returns false (and logs) for a file that can't be played.
-bool probe(const char *id, Sound &s) {
+bool probe(fs::FS &fs, const char *id, Sound &s) {
   char path[40];
   snprintf(path, sizeof(path), "/sounds/%s.wav", id);
-  File f = LittleFS.open(path, "r");
+  File f = fs.open(path, "r");
   if (!f) return false;
   wav::Info info;
   const char *why = "";
@@ -122,7 +123,7 @@ void begin() {
         for (size_t i = 0; i < count; i++)
           if (!strcmp(found[i].id, id)) return;
         Sound s{};
-        if (!probe(id, s)) return;  // missing or broken: not listed
+        if (!probe(LittleFS, id, s)) return;  // missing or broken: not listed
         if (name[0]) strlcpy(s.name, name, sizeof(s.name));
         else defaultName(id, s.name, sizeof(s.name));
         if (!strcmp(group, "soft") || !strcmp(group, "loud") || !strcmp(group, "care") || !strcmp(group, "pack")) strlcpy(s.group, group, sizeof(s.group));
@@ -135,9 +136,10 @@ void begin() {
   }
   if (idx) idx.close();
 
-  // 2. Every other .wav file, in directory order.
-  File dir = LittleFS.open("/sounds");
-  if (dir && dir.isDirectory()) {
+  // 2. Every other .wav file in flash, then (3.) every .wav on the card, in directory order.
+  auto scan = [&](fs::FS &fs, bool card) {
+    File dir = fs.open("/sounds");
+    if (!dir || !dir.isDirectory()) return;
     for (File f = dir.openNextFile(); f && count < kMaxSounds; f = dir.openNextFile()) {
       String fname = f.name();
       f.close();
@@ -149,13 +151,23 @@ void begin() {
       }
       bool known = false;
       for (size_t i = 0; i < count && !known; i++) known = !strcmp(found[i].id, fname.c_str());
-      if (known) continue;
+      if (known) {
+        if (card) Serial.printf("card sound %s.wav skipped: name already used by a built-in call\n", fname.c_str());
+        continue;
+      }
       Sound s{};
-      if (!probe(fname.c_str(), s)) continue;
+      if (!probe(fs, fname.c_str(), s)) continue;
       defaultName(s.id, s.name, sizeof(s.name));
+      if (card) {
+        strlcpy(s.group, "mine", sizeof(s.group));
+        s.card = true;
+      }
       found[count++] = s;
     }
-  }
+    dir.close();
+  };
+  scan(LittleFS, false);
+  if (fs::FS *card = sdcard::fs()) scan(*card, true);
 
   uint32_t total = LittleFS.totalBytes(), used = LittleFS.usedBytes();
   Sound *list = count ? (Sound *)malloc(count * sizeof(Sound)) : nullptr;
@@ -193,6 +205,19 @@ bool has(const char *id) {
   bool ok = find(id) >= 0;
   portEXIT_CRITICAL(&lock);
   return ok;
+}
+
+bool find(const char *id, Sound &out) {
+  portENTER_CRITICAL(&lock);
+  int i = find(id);
+  if (i >= 0) out = sounds[i];
+  portEXIT_CRITICAL(&lock);
+  return i >= 0;
+}
+
+bool builtIn(const char *id) {
+  Sound s;
+  return find(id, s) && !s.card;
 }
 
 uint32_t fsFree() { return freeBytes; }

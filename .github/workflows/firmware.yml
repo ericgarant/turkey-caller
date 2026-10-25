@@ -24,7 +24,9 @@ jobs:
       #   want 4.11.1 and the platform swaps it out mid-build ("No module named SCons.Tool...")
       # - the build calls click.parser.split_arg_string, which click 8.2+ breaks
       - run: pip install "platformio==6.1.19" "click<8.2"
-      # Builds the app and fails if it is over the 2.25 MB budget (scripts/check_size.py)
-      - run: pio run -d firmware
+      # Builds the app and fails if it is over the 2.25 MB budget (scripts/check_size.py).
+      # wrover is the main board (F12); wroom keeps the spare board's build working.
+      - run: pio run -d firmware -e wrover
+      - run: pio run -d firmware -e wroom
       # The LittleFS image builds even without the (non-redistributable) sounds
-      - run: pio run -d firmware -t buildfs
+      - run: pio run -d firmware -e wrover -t buildfs

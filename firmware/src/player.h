@@ -20,7 +20,7 @@ struct Stats {
   uint32_t lenMs;         // length of the playing clip
 };
 
-void begin();                        // start the decode task (after LittleFS is mounted)
+void begin();                        // start the decode task (after LittleFS and the card mount)
 // Queue a clip by name ("cluck"); a new play replaces the current one. `preRollMs` of silence
 // go first (a just-woken speaker's amp needs it).
 bool play(const char *id, bool loop = false, uint32_t preRollMs = 0);
@@ -29,6 +29,7 @@ void setLoop(bool on);               // change Repeat for the call playing now (
 void setVolume(uint8_t level);       // 0-100, applies now, saved to NVS later by loop()
 void loop();                         // call from loop(): deferred NVS save
 Stats stats();
+String error();                      // last card failure ("SD card removed"), cleared by the next tap
 
 // A2DP source data callback: fills `count` stereo frames, always returns count.
 int32_t fillFrames(Frame *frames, int32_t count);

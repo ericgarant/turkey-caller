@@ -4,8 +4,12 @@
 
 #include <LittleFS.h>
 #include <Preferences.h>
+#include <esp_heap_caps.h>
+#include <esp_memory_utils.h>
 #include <freertos/queue.h>
 
+#include "library.h"
+#include "sdcard.h"
 #include "wav.h"
 
 namespace player {
@@ -25,7 +29,9 @@ constexpr int kSampleRate = 44100;
 class Ring {
  public:
   bool begin(size_t size) {
-    buf_ = (uint8_t *)malloc(size);
+    // Internal RAM on purpose: with PSRAM in the heap (WROVER-E) a plain malloc this size would
+    // land in PSRAM, which is slower and shares the cache with flash reads (F12).
+    buf_ = (uint8_t *)heap_caps_malloc(size, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     size_ = buf_ ? size : 0;
     return buf_ != nullptr;
   }
@@ -51,6 +57,7 @@ class Ring {
     portEXIT_CRITICAL(&mux_);
     return n;
   }
+  bool internal() const { return buf_ && esp_ptr_internal(buf_); }
   void reset() {
     portENTER_CRITICAL(&mux_);
     head_ = tail_ = count_ = 0;
@@ -79,6 +86,8 @@ struct Command {
 Ring ring;
 QueueHandle_t commands = nullptr;  // length 1, overwritten: the latest tap wins
 File file;
+bool fromCard = false;             // decode task only: the open clip is on the SD card
+char lastError[40] = "";           // "SD card removed", shown by the page once; under `lock`
 
 portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
 char current[32] = "";
@@ -237,6 +246,15 @@ bool decodeSome() {
   size_t want = clip.info.adpcm ? clip.info.blockAlign : kReadChunk;
   if (want > clip.dataLeft) want = clip.dataLeft;
   size_t n = file.read(buf, want);
+  if (n < want && fromCard) {
+    // Short read with data still to come: the card was pulled or failed (F12). Stop the call
+    // now, mark the card gone so nothing retries it, and tell the page.
+    sdcard::markGone();
+    portENTER_CRITICAL(&lock);
+    strlcpy(lastError, "SD card removed", sizeof(lastError));
+    portEXIT_CRITICAL(&lock);
+    return false;
+  }
   if (n == 0) return false;
   clip.dataLeft -= n;
   if (clip.info.adpcm) {
@@ -264,9 +282,26 @@ void closeCurrent() {
 void startClip(const char *id, bool loop, uint32_t preRollMs) {
   char path[48];
   snprintf(path, sizeof(path), "/sounds/%s.wav", id);
-  file = LittleFS.open(path, "r");
+  library::Sound snd;
+  fromCard = library::find(id, snd) && snd.card;
+  fs::FS *fs = fromCard ? sdcard::fs() : &LittleFS;
+  if (!fs) {
+    Serial.printf("can't play %s: no SD card\n", id);
+    portENTER_CRITICAL(&lock);
+    strlcpy(lastError, "SD card removed", sizeof(lastError));
+    portEXIT_CRITICAL(&lock);
+    return;
+  }
+  file = fs->open(path, "r");
   if (!file) {
-    log_e("cannot open %s", path);
+    // Opening a card file that was there at boot fails once the card is gone.
+    if (fromCard) {
+      sdcard::markGone();
+      portENTER_CRITICAL(&lock);
+      strlcpy(lastError, "SD card removed", sizeof(lastError));
+      portEXIT_CRITICAL(&lock);
+    }
+    Serial.printf("can't open %s\n", path);
     return;
   }
   // The C library would give the open file a 4 KB read buffer. The decoder already reads whole
@@ -300,6 +335,11 @@ void task(void *) {
     TickType_t wait = file ? 0 : playing ? pdMS_TO_TICKS(10) : portMAX_DELAY;
     bool got = xQueueReceive(commands, &cmd, wait) == pdTRUE;
     if (got) {
+      if (!cmd.stop) {
+        portENTER_CRITICAL(&lock);
+        lastError[0] = 0;  // a new tap clears the last card error, like the speaker's (#14)
+        portEXIT_CRITICAL(&lock);
+      }
       closeCurrent();
       if (!cmd.stop) startClip(cmd.id, cmd.loop, cmd.preRollMs);
       continue;
@@ -339,6 +379,8 @@ void begin() {
   updateGain();
 
   if (!ring.begin(kRingBytes)) log_e("no memory for the %u byte audio ring", (unsigned)kRingBytes);
+  // F12: the ring and the decode buffers (static arrays) must be in internal RAM.
+  Serial.printf("audio buffers in %s RAM\n", ring.internal() && esp_ptr_internal(outBuf) ? "internal" : "PSRAM (unexpected)");
   commands = xQueueCreate(1, sizeof(Command));
   // Core 1 (Arduino side); Bluetooth runs on core 0. Priority above loop() and the web server.
   xTaskCreatePinnedToCore(task, "player", 4096, nullptr, 5, nullptr, 1);
@@ -384,6 +426,14 @@ void loop() {
     prefs.end();
     Serial.printf("volume %u saved\n", (unsigned)volume);
   }
+}
+
+String error() {
+  char copy[sizeof(lastError)];
+  portENTER_CRITICAL(&lock);
+  strlcpy(copy, lastError, sizeof(copy));
+  portEXIT_CRITICAL(&lock);
+  return String(copy);
 }
 
 Stats stats() {
