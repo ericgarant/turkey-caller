@@ -1,6 +1,6 @@
 # F03 Phone upload with conversion in the page
 
-> **Status: deferred** (24 Oct 2026). Eric skipped uploading his own recordings for now. Not in the active build order; see [README](README.md#deferred).
+> **Status: active again, after F12** (25 Oct 2026). Uploads are stored on the SD card of the WROVER-E board ([F12](F12-wrover-sd.md)), not in LittleFS. Wherever this spec says "free room" or F09, read the SD card's free space (`sdFree`). The 32 KB reserve and the 60 s cap per clip stay as written.
 
 **Story:** As a hunter, I pick a call recording from my phone (usually MP3 or M4A) and it becomes a button, without a computer.
 
