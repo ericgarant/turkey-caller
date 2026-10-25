@@ -9,14 +9,13 @@
 #include "heapmon.h"
 #include "library.h"
 #include "player.h"
+#include "settings.h"
 #include "version.h"
 #include "web_page.h"
 
 namespace web {
 namespace {
 
-constexpr const char *kApName = "TurkeyCaller";
-constexpr const char *kApPassword = "gobble123";  // becomes a setting with F05
 constexpr int kApChannel = 6;
 constexpr int kMaxClients = 2;
 constexpr size_t kMaxSockets = 3;            // two phones plus one stale socket being replaced
@@ -26,6 +25,9 @@ constexpr uint32_t kPushIdleMs = 10000;      // status push otherwise
 // on two phones at once (plus captive-portal probes) dipped the heap under 40 KB. The page
 // loads one thing at a time and retries a 503, so 4 covers two phones.
 constexpr int kMaxRequests = 4;
+constexpr uint32_t kRestartDelayMs = 1000;   // after the restart notice, so phones get it and the reply
+constexpr int kBootPin = 0;                   // the BOOT button: held 5 s while running resets Wi-Fi settings
+constexpr uint32_t kBootHoldMs = 5000;
 
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
@@ -36,6 +38,9 @@ volatile bool pushNow = false;       // something changed: push status on the ne
 volatile bool repeatOn = false;      // the Repeat switch, shared by every page (off after a restart)
 volatile int inFlight = 0;           // HTTP requests being served (AsyncTCP task; reset by loop())
 volatile uint32_t lastRequestMs = 0;  // last time a request was admitted or finished (watchdog for a stuck inFlight)
+// A settings restart: set by the config handler (AsyncTCP task) or the BOOT button, carried out by loop().
+const char *volatile restartReason = nullptr;  // "settings" or "reset"
+volatile uint32_t restartAskedMs = 0;
 
 // Escapes a string for a JSON value (speaker names are user-controlled).
 void jsonStr(String &out, const char *s) {
@@ -89,7 +94,7 @@ const char *btState() {
 String statusJson() {
   player::Stats p = player::stats();
   String j;
-  j.reserve(460);
+  j.reserve(480);
   j += "{\"bt\":\"";
   j += btState();
   j += "\",\"speaker\":";
@@ -119,6 +124,7 @@ String statusJson() {
   j += ",\"plays\":" + String(p.plays);
   j += ",\"underruns\":" + String(p.underruns);
   j += ",\"stalls\":" + String(p.stalls);
+  j += ",\"cfg\":" + String(settings::rev());
   j += ",\"version\":\"" FW_VERSION "\"}";
   return j;
 }
@@ -224,6 +230,107 @@ void handleConnect(AsyncWebServerRequest *req) {
   sendOk(req);
 }
 
+// ---- Settings (F05) ----
+
+void handleConfigGet(AsyncWebServerRequest *req) {
+  if (lowMemory(req)) return;
+  String j;
+  j.reserve(120);
+  j += "{\"ap_ssid\":";
+  jsonStr(j, settings::apSsid());
+  j += ",\"device_name\":";
+  jsonStr(j, settings::deviceName());
+  j += ",\"default_pass\":";
+  j += settings::defaultPass() ? "true" : "false";
+  j += ",\"rev\":" + String(settings::rev()) + "}";
+  req->send(200, "application/json", j);
+}
+
+bool hasParam(AsyncWebServerRequest *req, const char *name) { return req->hasParam(name, true) || req->hasParam(name); }
+
+void askRestart(const char *reason) {
+  restartAskedMs = millis();
+  restartReason = reason;
+}
+
+void handleConfigPost(AsyncWebServerRequest *req) {
+  if (restartReason) return sendError(req, 409, "restarting, try again in a few seconds");
+  // A page sends the rev it loaded; a different one means the other phone saved since (409, nothing saved).
+  // No rev at all (scripts, older pages) is accepted.
+  if (hasParam(req, "rev")) {
+    String r = param(req, "rev");
+    if (r.isEmpty() || strtoul(r.c_str(), nullptr, 10) != settings::rev())
+      return sendError(req, 409, "changed on another phone");
+  }
+  // A field left out keeps its value; an empty password keeps the password.
+  String ssid = hasParam(req, "ap_ssid") ? param(req, "ap_ssid") : String(settings::apSsid());
+  String name = hasParam(req, "device_name") ? param(req, "device_name") : String(settings::deviceName());
+  String pass = param(req, "ap_pass");
+  const char *err = settings::validate(ssid, pass, name);
+  if (err) {
+    Serial.printf("settings refused: %s\n", err);  // the message never contains the password
+    return sendError(req, 400, err);
+  }
+  bool changed = false, wifi = false;
+  settings::save(ssid, pass, name, &changed, &wifi);
+  pass = "";  // don't keep it around longer than needed
+  req->send(200, "application/json", wifi ? "{\"ok\":true,\"restart\":true}" : "{\"ok\":true,\"restart\":false}");
+  if (wifi) askRestart("settings");
+  else if (changed) pushNow = true;  // every phone sees the new cfg rev and reloads /api/config
+}
+
+// Sends {"evt":"restart"} to every page, then restarts kRestartDelayMs later. The event carries the
+// Wi-Fi name to rejoin, never the password.
+void restartLoop(uint32_t now) {
+  static bool told = false;
+  static uint32_t toldMs = 0;
+  const char *reason = restartReason;
+  if (!reason) return;
+  if (!told) {
+    if (now - restartAskedMs < 100) return;  // let the HTTP reply go out first
+    told = true;
+    toldMs = now;
+    String j = "{\"evt\":\"restart\",\"reason\":\"";
+    j += reason;
+    j += "\",\"ssid\":";
+    jsonStr(j, settings::apSsid());
+    j += "}";
+    ws.textAll(j);
+    Serial.printf("restarting in %u ms (%s), rejoin Wi-Fi \"%s\"\n", (unsigned)kRestartDelayMs, reason,
+                  settings::apSsid());
+    return;
+  }
+  if (now - toldMs < kRestartDelayMs) return;
+  player::stop();
+  delay(50);
+  ESP.restart();
+}
+
+// The BOOT button (GPIO0) read as a plain input while the firmware runs. Held 5 s: Wi-Fi name,
+// password and device name go back to the defaults, then a restart. Shorter presses do nothing.
+void bootButtonLoop(uint32_t now) {
+  static uint32_t downSince = 0;  // 0 = not pressed
+  static bool done = false;
+  bool down = digitalRead(kBootPin) == LOW;
+  if (!down) {
+    if (downSince && !done) Serial.printf("BOOT released after %u ms: nothing changed (hold 5 s to reset Wi-Fi settings)\n",
+                                          (unsigned)(now - downSince));
+    downSince = 0;
+    return;
+  }
+  if (done || restartReason) return;
+  if (!downSince) {
+    downSince = now ? now : 1;
+    Serial.println("BOOT pressed: keep holding 5 s to reset the Wi-Fi name, password and device name");
+    return;
+  }
+  if (now - downSince < kBootHoldMs) return;
+  done = true;
+  Serial.println("BOOT held 5 s: Wi-Fi name, password and device name reset to the defaults (speaker, volume and sounds kept)");
+  settings::resetDefaults();
+  askRestart("reset");
+}
+
 void notYet(AsyncWebServerRequest *req) { sendError(req, 501, "not available in this firmware yet"); }
 
 // ---- WebSocket ----
@@ -290,9 +397,10 @@ struct Shown {
   uint8_t volume;
   int clients;
   size_t speakerLen;
+  uint32_t cfg;
   bool operator!=(const Shown &o) const {
     return strcmp(bt, o.bt) || strcmp(current, o.current) || strcmp(stream, o.stream) || errorLen != o.errorLen || playing != o.playing || loop != o.loop || repeat != o.repeat ||
-           volume != o.volume || clients != o.clients || speakerLen != o.speakerLen;
+           volume != o.volume || clients != o.clients || speakerLen != o.speakerLen || cfg != o.cfg;
   }
 };
 
@@ -309,6 +417,7 @@ Shown shownNow() {
   s.repeat = repeatOn;
   s.clients = WiFi.softAPgetStationNum();
   s.speakerLen = bt::speakerName().length();
+  s.cfg = settings::rev();
   return s;
 }
 
@@ -381,11 +490,18 @@ void begin() {
                     (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince());
     }
   });
+  pinMode(kBootPin, INPUT_PULLUP);
   WiFi.mode(WIFI_AP);
-  bool apOk = WiFi.softAP(kApName, kApPassword, kApChannel, 0, kMaxClients);
+  bool apOk = WiFi.softAP(settings::apSsid(), settings::apPass(), kApChannel, 0, kMaxClients);
+  if (!apOk) {
+    // The radio refused the saved name or password: start with the defaults so the board stays reachable.
+    Serial.println("Wi-Fi AP refused the saved settings, starting with the defaults for this boot");
+    settings::useDefaultsForThisBoot();
+    apOk = WiFi.softAP(settings::apSsid(), settings::apPass(), kApChannel, 0, kMaxClients);
+  }
   IPAddress ip = WiFi.softAPIP();
   bool dnsOk = dns.start(53, "*", ip);  // captive portal: every name resolves to us
-  Serial.printf("Wi-Fi AP \"%s\" %s, channel %d, ip %s, captive DNS %s\n", kApName,
+  Serial.printf("Wi-Fi AP \"%s\" %s, channel %d, ip %s, captive DNS %s\n", settings::apSsid(),
                 apOk ? "up" : "FAILED", WiFi.channel(), ip.toString().c_str(), dnsOk ? "up" : "FAILED");
 
   ws.onEvent(onWsEvent);
@@ -424,7 +540,8 @@ void begin() {
   server.on("/api/sounds/delete", HTTP_POST, notYet);  // F03
   server.on("/api/sounds", HTTP_GET, handleSounds);
   server.on("/api/sounds", HTTP_POST, notYet);         // upload: F03
-  server.on("/api/config", HTTP_ANY, notYet);          // F05
+  server.on("/api/config", HTTP_GET, handleConfigGet);    // F05
+  server.on("/api/config", HTTP_POST, handleConfigPost);
   server.on("/api/play", HTTP_POST, handlePlay);
   server.on("/api/stop", HTTP_POST, [](AsyncWebServerRequest *req) {
     logStop();
@@ -478,6 +595,9 @@ void loop() {
     Serial.printf("request count stuck at %d, reset\n", (int)inFlight);
     inFlight = 0;
   }
+  uint32_t now = millis();
+  bootButtonLoop(now);
+  restartLoop(now);
   pushLoop();
 }
 

@@ -10,7 +10,7 @@ Notes for whoever picks up the firmware next. These are the things the specs and
 | F04 Repeat, F08 volume | Merged (#11). Repeat is one switch on the board, shared by every phone (Eric wants every UI change mirrored on the other phone) |
 | F10 heap floor | Merged work in #10 and #11. One open item, tracked in **issue #8** (see below) |
 | F06 reconnect, F07 idle wake | PR #14, one state machine in `bt.cpp` |
-| F05 Settings | Next. The web thread is building the page against a mock contract: `rev` conflict check, `cfg` in status, a WS `{"evt":"restart"}` before a settings restart. Build the firmware from the contract written in `docs/features/F05-settings.md` / `web/README.md` |
+| F05 Settings | Web side merged (#17). Firmware side in `src/settings.*` and the `/api/config` handlers in `web.cpp`; restart and BOOT-button reset run from `web::loop()` |
 | F03 upload, F09 storage | Deferred by Eric. Keep the 501 stubs; the page hides the controls (`EDIT_SOUNDS=false`) |
 | F11 Cooboom speaker | When it arrives |
 
