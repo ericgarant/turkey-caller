@@ -51,14 +51,14 @@ try {
       assert.equal(s.animal, "turkey");
     }
   });
-  await step("a moose pack on the card adds 6 moose calls; pulling it removes them", async () => {
-    await post("/api/mock/pack", { name: "moose", on: "1" });
+  await step("a deer pack on the card adds 6 deer calls; pulling it removes them", async () => {
+    await post("/api/mock/pack", { name: "deer", on: "1" });
     const list = await get("/api/sounds");
-    const moose = list.filter((s) => s.animal === "moose");
-    assert.equal(moose.length, 6);
-    assert.ok(moose.every((s) => s.group === "moose" && s.hint && s.ms > 0 && s.bytes > 0));
-    assert.ok(moose.some((s) => s.ms > 10000), "pack clips are not capped at 10 s");
-    await post("/api/mock/pack", { name: "moose", on: "0" });
+    const deer = list.filter((s) => s.animal === "deer");
+    assert.equal(deer.length, 6);
+    assert.ok(deer.every((s) => s.group === "deer" && s.hint && s.ms > 0 && s.bytes > 0));
+    assert.ok(deer.some((s) => s.ms > 10000), "pack clips are not capped at 10 s");
+    await post("/api/mock/pack", { name: "deer", on: "0" });
     assert.equal((await get("/api/sounds")).length, 16);
   });
   await step("play, replace on a new play, stop", async () => {

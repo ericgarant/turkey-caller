@@ -19,7 +19,7 @@ Specs for what comes after Phase 0 (the Wi-Fi test page and Bluetooth ADPCM play
 | F11 | [Future Cooboom speaker](F11-cooboom-speaker.md) | Firmware, QA | B2 to B12 rerun |
 | F12 | [Move to the WROVER-E board with an SD card](F12-wrover-sd.md) | Firmware, web | new B18 |
 | F13 | [Motion sensor and LED](F13-motion-led.md) | Firmware and web (step 1: LED and its setting; step 2 later) | new B19 |
-| F14 | [Call packs: moose and deer](F14-call-packs.md) | Web (done with the spec), firmware after F12 | new B20 |
+| F14 | [Call packs: deer, moose and more](F14-call-packs.md) | Web (done with the spec), firmware after F12 | new B20 |
 
 ## Suggested build order
 
