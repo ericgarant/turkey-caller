@@ -8,7 +8,7 @@ const PORT = 8091;
 const server = spawn(process.execPath, ["mock/server.mjs", String(PORT)], { stdio: ["ignore", "pipe", "inherit"] });
 await new Promise((r) => server.stdout.once("data", r));
 
-const browser = await chromium.launch();
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const errors = [];
 let failed = false;
 try {
@@ -22,6 +22,22 @@ try {
     await page.waitForSelector(".call");
     assert.equal(await page.locator(".call").count(), 16);
     assert.deepEqual(await page.locator("#groups h2").allTextContents(), ["Soft calls", "Louder calls", "Use with care", "Dindon pack"]);
+  });
+  await step("animal tabs: Moose is empty with a hint until the pack is on the card, then lists 6 calls", async () => {
+    assert.deepEqual(await page.locator("#tabs button").allTextContents(), ["Turkey", "Moose"]);
+    await page.click('#tabs [data-animal="moose"]');
+    assert.match(await page.locator("#groups").innerText(), /SD card/);
+    await page.request.post(`http://localhost:${PORT}/api/mock/pack`, { form: { name: "moose", on: "1" } });
+    await page.reload();
+    await page.waitForSelector(".call");
+    assert.equal(await page.locator("#tabs [aria-selected=true]").getAttribute("data-animal"), "moose");  // remembered
+    assert.equal(await page.locator(".call").count(), 6);
+    assert.deepEqual(await page.locator("#groups h2").allTextContents(), ["Moose calls"]);
+    await page.click('#tabs [data-animal="turkey"]');
+    assert.equal(await page.locator(".call").count(), 16);
+    await page.request.post(`http://localhost:${PORT}/api/mock/pack`, { form: { name: "moose", on: "0" } });
+    await page.reload();
+    await page.waitForSelector(".call");
   });
   await step("speaker pill shows the connected speaker", async () => {
     await page.waitForFunction(() => document.getElementById("spkText").textContent === "Level Box Slim");

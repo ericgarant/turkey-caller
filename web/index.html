@@ -51,6 +51,9 @@ main{flex:1;padding-block:16px 24px}
 h2{font:700 15px/1 var(--display);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 h2 small{font:500 13px var(--body);letter-spacing:0;text-transform:none}
 #groups{display:flex;flex-direction:column;gap:22px}
+.tabs{display:flex;gap:8px}
+.tabs button{flex:1;min-height:44px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);color:var(--fg);font:700 17px var(--display);text-transform:uppercase;letter-spacing:.06em;cursor:pointer}
+.tabs button[aria-selected=true]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 @media (min-width:480px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .call{position:relative;overflow:hidden;min-height:92px;padding:12px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface);text-align:left;display:flex;flex-direction:column;justify-content:space-between;gap:6px;cursor:pointer;touch-action:manipulation}
@@ -140,6 +143,7 @@ nav button[aria-current="page"]{color:var(--accent)}
         <p id="noSpkText"><b>No speaker connected.</b> Turn the speaker on, or pick one under Speaker.</p>
         <button class="btn" type="button" data-go="speaker">Speaker</button>
       </div>
+      <div class="tabs" id="tabs" role="tablist" aria-label="Animal"></div>
       <div id="groups"><p class="empty">Loading calls…</p></div>
       <label class="loop" for="loopSw"><input class="switch" type="checkbox" id="loopSw"> Repeat the call until I tap Stop</label>
     </section>
@@ -223,6 +227,7 @@ nav button[aria-current="page"]{color:var(--accent)}
             <li><b>Repeat</b> loops the call until you tap Stop. The switch is shared by both phones.</li>
             <li><b>Volume</b>: slider, or the − and + buttons. It is remembered.</li>
             <li>If the speaker went to sleep, the first tap wakes it. Allow a few seconds.</li>
+            <li>Turkey, Moose and Deer calls have their own tab. Moose and deer calls are stored on the SD card, so they only show when the card is in.</li>
             <li>Gobble and putt are under "Use with care": they can draw hunters or spook birds.</li>
             <li>The moon button switches to a dim red screen that saves your night vision.</li>
           </ul>
@@ -296,7 +301,10 @@ const INFO={
   dindon_purr:["pack","Bird close and wary, calms it in"],dindon_yelp:["pack","Spring or fall, start soft, all day"],
   dindon_fast_yelp:["pack","Hung-up or henned-up gobbler"],dindon_kee_kee:["pack","Fall, 20 min after a flock scatters"],
   dindon_gobble:["pack","Last resort. Draws other hunters"]};
-const GROUPS={soft:"Soft calls",loud:"Louder calls",care:"Use with care",pack:"Dindon pack",other:"Other sounds"};
+const GROUPS={soft:"Soft calls",loud:"Louder calls",care:"Use with care",pack:"Dindon pack",moose:"Moose calls",deer:"Deer calls",other:"Other sounds"};
+// Animals shown as tabs. Turkey and Moose always show; others only once the board lists a call for them.
+const ANIMALS={turkey:"Turkey",moose:"Moose",deer:"Deer"},ALWAYS=["turkey","moose"];
+let animal="turkey";try{animal=localStorage.animal||"turkey"}catch(_){}
 const BT_TEXT={connected:"Connected",connecting:"Connecting…",searching:"Looking for speaker…",idle:"No speaker"};
 
 const $=id=>document.getElementById(id);
@@ -373,16 +381,30 @@ async function loadSounds(){
     const list=await api("/api/sounds");
     sounds=list.map(s=>typeof s==="string"?{id:s}:s).map(s=>{
       const i=INFO[s.id]||[];
-      return {id:s.id,name:s.name||s.id.replace(/_/g," ").replace(/^./,c=>c.toUpperCase()),group:GROUPS[s.group]?s.group:(i[0]||"other"),hint:s.hint||i[1]||"",ms:s.ms||0,bytes:s.bytes||0};
+      return {id:s.id,name:s.name||s.id.replace(/_/g," ").replace(/^./,c=>c.toUpperCase()),animal:ANIMALS[s.animal]?s.animal:"turkey",group:GROUPS[s.group]?s.group:(i[0]||"other"),hint:s.hint||i[1]||"",ms:s.ms||0,bytes:s.bytes||0};
     });
     renderCalls();renderSounds();paint();
   }catch(e){$("groups").innerHTML=`<p class="empty">Could not load the calls. ${esc(why(e))}</p>`}
 }
 function renderCalls(){
   const box=$("groups");box.innerHTML="";
-  if(!sounds.length){box.innerHTML=`<p class="empty">No sounds on the caller yet. Add some under Settings.</p>`;return}
+  const tabs=Object.keys(ANIMALS).filter(a=>ALWAYS.includes(a)||sounds.some(s=>s.animal===a));
+  if(!tabs.includes(animal))animal="turkey";
+  const tb=$("tabs");tb.innerHTML="";
+  for(const a of tabs){
+    const t=document.createElement("button");t.type="button";t.setAttribute("role","tab");t.dataset.animal=a;
+    t.setAttribute("aria-selected",a===animal);t.textContent=ANIMALS[a];
+    t.onclick=()=>{animal=a;try{localStorage.animal=a}catch(_){}renderCalls();paint()};
+    tb.appendChild(t);
+  }
+  const mine=sounds.filter(s=>s.animal===animal);
+  if(!mine.length){
+    box.innerHTML=animal==="turkey"?`<p class="empty">No sounds on the caller yet. Add some under Settings.</p>`
+      :`<p class="empty">No ${ANIMALS[animal].toLowerCase()} calls on the caller. They live on the SD card: put the call pack on the card (see Instructions) and restart the caller.</p>`;
+    return;
+  }
   for(const g of Object.keys(GROUPS)){
-    const list=sounds.filter(s=>s.group===g);if(!list.length)continue;
+    const list=mine.filter(s=>s.group===g);if(!list.length)continue;
     const sec=document.createElement("div");
     sec.innerHTML=`<h2>${GROUPS[g]}</h2><div class="grid"></div>`;
     for(const s of list){

@@ -48,7 +48,18 @@ try {
       assert.match(s.id, /^[a-z0-9_]{1,24}$/);
       assert.ok(["soft", "loud", "care", "pack"].includes(s.group));
       assert.ok(s.bytes > 0 && s.ms > 0);
+      assert.equal(s.animal, "turkey");
     }
+  });
+  await step("a moose pack on the card adds 6 moose calls; pulling it removes them", async () => {
+    await post("/api/mock/pack", { name: "moose", on: "1" });
+    const list = await get("/api/sounds");
+    const moose = list.filter((s) => s.animal === "moose");
+    assert.equal(moose.length, 6);
+    assert.ok(moose.every((s) => s.group === "moose" && s.ms > 0 && s.bytes > 0));
+    assert.ok(moose.some((s) => s.ms > 10000), "pack clips are not capped at 10 s");
+    await post("/api/mock/pack", { name: "moose", on: "0" });
+    assert.equal((await get("/api/sounds")).length, 16);
   });
   await step("play, replace on a new play, stop", async () => {
     assert.equal((await post("/api/play", { id: "cluck", loop: "0" })).code, 200);
