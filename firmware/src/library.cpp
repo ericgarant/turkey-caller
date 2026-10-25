@@ -9,7 +9,6 @@
 namespace library {
 namespace {
 
-constexpr size_t kMaxSounds = 64;      // built-ins, packs and uploads together (F14)
 constexpr size_t kMaxIndexBytes = 4096;  // each index.json is read whole; keep it small (F10)
 constexpr size_t kMaxPacks = 8;
 constexpr uint32_t kMaxPackClipMs = 60000;  // F14: pack clips up to 60 s each
@@ -17,6 +16,7 @@ constexpr uint32_t kMaxPackClipMs = 60000;  // F14: pack clips up to 60 s each
 Sound *sounds = nullptr;  // exactly `n` entries, in PSRAM when the board has it (F14)
 size_t n = 0;
 uint32_t freeBytes = 0, totalBytes = 0;
+volatile uint32_t listRev = 0;
 portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
 
 // PSRAM when there is some (WROVER-E), else the normal heap (WROOM).
@@ -166,6 +166,7 @@ void path(const Sound &s, char *out, size_t cap) {
 }
 
 void begin() {
+  uint32_t startMs = millis();
   size_t count = 0;
   // Scratch list while scanning (~9 KB), freed once the list is built.
   Sound *found = (Sound *)allocList(kMaxSounds * sizeof(Sound));
@@ -285,9 +286,11 @@ void begin() {
   n = count;
   totalBytes = total;
   freeBytes = total > used ? total - used : 0;
+  listRev = listRev + 1;
   portEXIT_CRITICAL(&lock);
   free(old);
-  Serial.printf("library: %u sounds, %u of %u bytes free\n", (unsigned)count, (unsigned)freeBytes, (unsigned)totalBytes);
+  Serial.printf("library: %u sounds, %u of %u bytes free, scan %u ms\n", (unsigned)count, (unsigned)freeBytes, (unsigned)totalBytes,
+                (unsigned)(millis() - startMs));
 }
 
 size_t count() {
@@ -325,6 +328,7 @@ bool builtIn(const char *id) {
   return find(id, s) && !s.card;
 }
 
+uint32_t rev() { return listRev; }
 uint32_t fsFree() { return freeBytes; }
 uint32_t fsTotal() { return totalBytes; }
 

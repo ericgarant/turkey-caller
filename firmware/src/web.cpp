@@ -12,6 +12,7 @@
 #include "player.h"
 #include "sdcard.h"
 #include "settings.h"
+#include "uploads.h"
 #include "version.h"
 #include "web_page.h"
 
@@ -67,6 +68,14 @@ String param(AsyncWebServerRequest *req, const char *name) {
   if (req->hasParam(name, true)) return req->getParam(name, true)->value();
   if (req->hasParam(name)) return req->getParam(name)->value();
   return "";
+}
+
+// GET replies must never come from a phone's cache: after one phone adds or deletes a
+// recording, a cached /api/sounds kept the other phone on the old list, even after a reload.
+void sendJson(AsyncWebServerRequest *req, const String &j) {
+  AsyncWebServerResponse *res = req->beginResponse(200, "application/json", j);
+  res->addHeader("Cache-Control", "no-store");
+  req->send(res);
 }
 
 void sendOk(AsyncWebServerRequest *req) { req->send(200, "application/json", "{\"ok\":true}"); }
@@ -140,13 +149,14 @@ String statusJson() {
   j += motion::active() ? "true" : "false";
   j += ",\"motionAt\":" + String(motion::lastAt());
   j += ",\"cfg\":" + String(settings::rev());
+  j += ",\"snd\":" + String(library::rev());  // F03: the sound list changed
   j += ",\"version\":\"" FW_VERSION "\"}";
   return j;
 }
 
 void handleStatus(AsyncWebServerRequest *req) {
   if (lowMemory(req)) return;
-  req->send(200, "application/json", statusJson());
+  sendJson(req, statusJson());
 }
 
 void handleSounds(AsyncWebServerRequest *req) {
@@ -170,7 +180,7 @@ void handleSounds(AsyncWebServerRequest *req) {
     j += ",\"bytes\":" + String(s.bytes) + ",\"ms\":" + String(s.ms) + "}";
   }
   j += ']';
-  req->send(200, "application/json", j);
+  sendJson(req, j);
 }
 
 bool truthy(const String &v) { return v == "1" || v == "true"; }
@@ -228,7 +238,7 @@ void handleDevices(AsyncWebServerRequest *req) {
     j += ",\"rssi\":" + String(list[i].rssi) + "}";
   }
   j += "]}";
-  req->send(200, "application/json", j);
+  sendJson(req, j);
 }
 
 void handleConnect(AsyncWebServerRequest *req) {
@@ -264,7 +274,7 @@ void handleConfigGet(AsyncWebServerRequest *req) {
   j += ",\"led_motion\":";
   j += settings::ledMotion() ? "1" : "0";  // F13
   j += ",\"rev\":" + String(settings::rev()) + "}";
-  req->send(200, "application/json", j);
+  sendJson(req, j);
 }
 
 bool hasParam(AsyncWebServerRequest *req, const char *name) { return req->hasParam(name, true) || req->hasParam(name); }
@@ -358,7 +368,40 @@ void bootButtonLoop(uint32_t now) {
   askRestart("reset");
 }
 
-void notYet(AsyncWebServerRequest *req) { sendError(req, 501, "not available in this firmware yet"); }
+// ---- Uploads (F03): phone recordings to /sounds/ on the SD card ----
+
+// The upload callback keeps its latest result in the request (freed with it) for onRequest.
+void keepResult(AsyncWebServerRequest *req, uploads::Result r) {
+  if (!req->_tempObject) req->_tempObject = malloc(sizeof(uploads::Result));
+  if (req->_tempObject) *(uploads::Result *)req->_tempObject = r;
+}
+
+void handleUploadChunk(AsyncWebServerRequest *req, const String &filename, size_t index, uint8_t *data, size_t len, bool final) {
+  uploads::Result *prev = (uploads::Result *)req->_tempObject;
+  if (prev && prev->code != 200) return;  // already refused: drop the rest
+  uploads::Result r{200, ""};
+  if (index == 0) r = uploads::start(req, filename.c_str(), req->contentLength());
+  if (r.code == 200 && len) r = uploads::data(req, data, len);
+  if (r.code == 200 && final) r = uploads::finish(req);
+  else if (r.code != 200) uploads::finish(req);  // clears this request's refused upload (no-op for another's)
+  keepResult(req, r);
+}
+
+void handleUploadDone(AsyncWebServerRequest *req) {
+  uploads::Result *r = (uploads::Result *)req->_tempObject;
+  if (!r) return sendError(req, 400, "no file in the upload");
+  if (r->code != 200) return sendError(req, r->code, r->msg);
+  pushNow = true;  // the status push carries the new free space
+  sendOk(req);
+}
+
+void handleDelete(AsyncWebServerRequest *req) {
+  String id = param(req, "id");
+  uploads::Result r = uploads::remove(id.c_str());
+  if (r.code != 200) return sendError(req, r.code, r.msg);
+  pushNow = true;
+  sendOk(req);
+}
 
 // ---- WebSocket ----
 
@@ -424,10 +467,10 @@ struct Shown {
   uint8_t volume;
   int clients;
   size_t speakerLen;
-  uint32_t cfg;
+  uint32_t cfg, snd;
   bool operator!=(const Shown &o) const {
     return strcmp(bt, o.bt) || strcmp(current, o.current) || strcmp(stream, o.stream) || errorLen != o.errorLen || playing != o.playing || loop != o.loop || repeat != o.repeat || motion != o.motion ||
-           volume != o.volume || clients != o.clients || speakerLen != o.speakerLen || cfg != o.cfg;
+           volume != o.volume || clients != o.clients || speakerLen != o.speakerLen || cfg != o.cfg || snd != o.snd;
   }
 };
 
@@ -446,6 +489,7 @@ Shown shownNow() {
   s.speakerLen = bt::speakerName().length();
   s.cfg = settings::rev();
   s.motion = motion::active();
+  s.snd = library::rev();
   return s;
 }
 
@@ -565,9 +609,9 @@ void begin() {
   server.on("/", HTTP_GET, handlePage);
   server.on("/api/status", HTTP_GET, handleStatus);
   // on() also matches sub-paths and the first match wins, so /api/sounds/delete goes first.
-  server.on("/api/sounds/delete", HTTP_POST, notYet);  // F03
+  server.on("/api/sounds/delete", HTTP_POST, handleDelete);  // F03
   server.on("/api/sounds", HTTP_GET, handleSounds);
-  server.on("/api/sounds", HTTP_POST, notYet);         // upload: F03
+  server.on("/api/sounds", HTTP_POST, handleUploadDone, handleUploadChunk);  // upload: F03
   server.on("/api/config", HTTP_GET, handleConfigGet);    // F05
   server.on("/api/config", HTTP_POST, handleConfigPost);
   server.on("/api/play", HTTP_POST, handlePlay);
@@ -627,6 +671,7 @@ void loop() {
   bootButtonLoop(now);
   restartLoop(now);
   pushLoop();
+  uploads::loop();
 }
 
 }  // namespace web

@@ -11,6 +11,8 @@
 
 namespace library {
 
+constexpr size_t kMaxSounds = 64;  // built-ins, packs and uploads together (F14)
+
 struct Sound {
   char id[25];     // file name without .wav: a-z0-9_, at most 24 characters
   char name[33];   // display name
@@ -31,6 +33,7 @@ bool find(const char *id, Sound &out); // the sound with this id
 bool builtIn(const char *id);          // a built-in call (in flash) has this id
 // The clip's file: "/sounds/<id>.wav" (flash or card) or "/packs/<pack>/<id>.wav" (card).
 void path(const Sound &s, char *out, size_t cap);
+uint32_t rev();                        // bumped by every begin(): phones reload the list when it moves
 uint32_t fsFree();                     // bytes free on LittleFS (cached, updated by begin())
 uint32_t fsTotal();
 bool validId(const char *id);

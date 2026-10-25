@@ -61,12 +61,25 @@ let motionNow = false, motionAt = 0;
 
 // SD card (F12): present when a pack is inserted or the card is set on; POST /api/mock/sd on=0|1 (empty = flash only again).
 // Off by default so the older tests see a board with flash only (no sd fields); on=1 gives a 1 GB card, on=0 no card.
-let sdOn = null;
+// free=N sets the card's free bytes (to test 413). Uploads (F03) go to the card, group "mine".
+let sdOn = null, sdFree = null, sndRev = 1;  // sndRev: the status `snd`, bumped when the list changes
 const SD_TOTAL = 960 * 1024 * 1024;
 function sdStatus() {
   if (sdOn === null) return {};
-  return sdOn ? { sdTotal: SD_TOTAL, sdFree: SD_TOTAL - 5 * 1024 * 1024 } : { sdTotal: 0, sdFree: 0 };
+  return sdOn ? { sdTotal: SD_TOTAL, sdFree: sdFree ?? SD_TOTAL - 5 * 1024 * 1024 } : { sdTotal: 0, sdFree: 0 };
 }
+// F03 upload check, as the board does it: mono IMA ADPCM WAV at 22.05 kHz.
+function wavError(file) {
+  const i = file.indexOf("RIFF");
+  if (i < 0 || file.toString("latin1", i + 8, i + 12) !== "WAVE") return "not a WAV file";
+  const f = file.indexOf("fmt ", i);
+  if (f < 0) return "no fmt chunk";
+  if (file.readUInt16LE(f + 8) !== 0x11) return "upload must be IMA ADPCM WAV (16-bit PCM is too big)";
+  if (file.readUInt16LE(f + 10) !== 1) return "not mono";
+  if (file.readUInt32LE(f + 12) !== 22050) return "upload must be 22.05 kHz";
+  return "";
+}
+const cardPlaying = () => { const s = sounds.find((x) => x.id === st.current); return st.playing && s && (s.group === "mine" || s.animal !== "turkey"); };
 
 function status() {
   const s = sounds.find((x) => x.id === st.current);
@@ -77,7 +90,7 @@ function status() {
   return {
     ...st, cfg: rev, pos_ms: pos, len_ms: len, plays: 0, underruns: 0,
     heap: 70000 + Math.round(Math.random() * 3000), minHeap: 52880, maxBlock: 40000,
-    fsFree: FS_TOTAL - used, fsTotal: FS_TOTAL, ...sdStatus(), motion: !!motionNow, motionAt, clients: sockets.size || 1,
+    fsFree: FS_TOTAL - used, fsTotal: FS_TOTAL, ...sdStatus(), snd: sndRev, motion: !!motionNow, motionAt, clients: sockets.size || 1,
     uptime: Math.floor((Date.now() - boot) / 1000) + 4380, version: "mock",
   };
 }
@@ -180,7 +193,7 @@ const server = http.createServer(async (req, res) => {
   const route = req.method + " " + url.pathname;
   if (process.env.MOCK_LOG) console.log(route, JSON.stringify(p));
 
-  if (route === "POST /api/mock/sd") { sdOn = p.on === "" ? null : p.on === "1"; if (sdOn === false) st.error = "SD card removed"; push(); return ok(res); }
+  if (route === "POST /api/mock/sd") { if (p.free) { sdFree = +p.free; return ok(res); } sdFree = null; sdOn = p.on === "" ? null : p.on === "1"; if (sdOn === false) st.error = "SD card removed"; push(); return ok(res); }
   if (route === "POST /api/mock/pack") {
     const pack = PACKS[p.name]; if (!pack) return fail(res, 404, "no such pack");
     for (const c of pack) { const i = sounds.findIndex((x) => x.id === c.id); if (i >= 0) sounds.splice(i, 1); }
@@ -247,21 +260,29 @@ const server = http.createServer(async (req, res) => {
     // Test hook: holding BOOT for 5 s on the board
     case "POST /api/mock/boot-reset": Object.assign(cfg, DEFAULTS); rev++; ok(res); return restart("reset");
     case "POST /api/sounds": {
-      if (st.playing) return fail(res, 409, "stop playback first");
+      // Board rules (F03 on F12): the card must be there; a built-in or pack id is taken; the
+      // card is busy only while one of its own sounds plays; 32 KB stay free.
+      if (!sdOn) return fail(res, 503, "No SD card: recordings unavailable");
       const m = /filename="([a-z0-9_]{1,24})\.wav"/.exec(raw.toString("latin1"));
       if (!m) return fail(res, 400, "file must be name.wav with a-z, 0-9 and _");
-      if (raw.length > status().fsFree) return fail(res, 413, "not enough room");
-      const ms = Math.round(raw.length / BYTES_PER_MS);
       const old = sounds.find((x) => x.id === m[1]);
+      if (old && old.group !== "mine") return fail(res, 409, "name already used by a built-in or pack call");
+      if (cardPlaying()) return fail(res, 409, "stop playback first");
+      if (raw.length + 32768 > sdStatus().sdFree) return fail(res, 413, "not enough room on the SD card");
+      const why = wavError(raw);
+      if (why) return fail(res, 400, why);
+      const ms = Math.round(raw.length / BYTES_PER_MS);
+      sndRev++;
       if (old) Object.assign(old, { bytes: raw.length, ms });
-      else sounds.push({ id: m[1], name: m[1], animal: "turkey", group: "other", ms, bytes: raw.length });
+      else sounds.push({ id: m[1], name: m[1].replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()), animal: "turkey", group: "mine", hint: "", ms, bytes: raw.length });
       return ok(res);
     }
     case "POST /api/sounds/delete": {
-      if (st.playing) return fail(res, 409, "stop playback first");
       const i = sounds.findIndex((x) => x.id === p.id);
       if (i < 0) return fail(res, 404, "no such sound");
-      sounds.splice(i, 1); return ok(res);
+      if (sounds[i].group !== "mine") return fail(res, 400, "built-in and pack calls can't be deleted");
+      if (cardPlaying()) return fail(res, 409, "stop playback first");
+      sndRev++; sounds.splice(i, 1); return ok(res);
     }
   }
   if (url.pathname.startsWith("/api/")) return fail(res, 404, "not found");

@@ -118,9 +118,28 @@ try {
     assert.match(await page.textContent("#fsText"), /used of 1408 KB/);
     assert.equal(await page.inputValue("#apSsid"), "TurkeyCaller");
   });
-  await step("adding and deleting sounds is hidden for now (F03 deferred)", async () => {
+  await step("with no SD card, adding sounds is hidden and nothing can be deleted", async () => {
     assert.equal(await page.isVisible("#upFile"), false);
     assert.equal(await page.locator("#sndList [data-del]").count(), 0);
+  });
+  await step("with a card, a WAV from the phone is converted, uploaded, listed as mine, then deleted (F03)", async () => {
+    await page.evaluate(() => fetch("/api/mock/sd", { method: "POST", body: new URLSearchParams({ on: "1" }) }));
+    await page.waitForSelector("#upFile", { state: "visible", timeout: 8000 });
+    // 1 s of 440 Hz, 16-bit PCM stereo at 44.1 kHz: the page must turn it into mono ADPCM at 22.05 kHz.
+    const n = 44100, b = Buffer.alloc(44 + n * 4);
+    b.write("RIFF", 0); b.writeUInt32LE(36 + n * 4, 4); b.write("WAVEfmt ", 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(2, 22);
+    b.writeUInt32LE(44100, 24); b.writeUInt32LE(44100 * 4, 28); b.writeUInt16LE(4, 32); b.writeUInt16LE(16, 34); b.write("data", 36); b.writeUInt32LE(n * 4, 40);
+    for (let i = 0; i < n; i++) { const v = Math.round(12000 * Math.sin(2 * Math.PI * 440 * i / 44100)); b.writeInt16LE(v, 44 + i * 4); b.writeInt16LE(v, 46 + i * 4); }
+    await page.setInputFiles("#upFile", { name: "Owl Hoot.wav", mimeType: "audio/wav", buffer: b });
+    await page.waitForFunction(() => [...document.querySelectorAll("#sndList .mono")].some((e) => e.textContent.startsWith("owl_hoot.wav")), null, { timeout: 10000 });
+    const s = await page.evaluate(async () => (await (await fetch("/api/sounds")).json()).find((x) => x.id === "owl_hoot"));
+    assert.equal(s.group, "mine");
+    assert.ok(s.bytes > 11000 && s.bytes < 13000, `about 11 KB for 1 s of ADPCM, got ${s.bytes}`);
+    assert.equal(await page.locator("#sndList [data-del]").count(), 1);
+    await page.click('#sndList [data-del="owl_hoot"]');
+    await page.click('#sndList [data-del="owl_hoot"]');
+    await page.waitForFunction(() => !document.querySelector('#sndList [data-del="owl_hoot"]'), null, { timeout: 8000 });
+    await page.evaluate(() => fetch("/api/mock/sd", { method: "POST", body: new URLSearchParams({ on: "" }) }));
   });
   await step("short Wi-Fi password is refused before sending", async () => {
     await page.fill("#apPass", "short");

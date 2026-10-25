@@ -20,9 +20,18 @@ const post = async (p, form = {}) => {
   const r = await fetch(base + p, { method: "POST", body: new URLSearchParams(form) });
   return { code: r.status, body: await r.json() };
 };
-const upload = async (name, size) => {
+// A mono IMA ADPCM WAV at 22.05 kHz of about `size` bytes (silence), the format the page uploads (F03).
+const adpcmWav = (size, { format = 0x11, rate = 22050 } = {}) => {
+  const blocks = Math.max(1, Math.round((size - 60) / 256)), b = Buffer.alloc(60 + blocks * 256);
+  b.write("RIFF", 0); b.writeUInt32LE(b.length - 8, 4); b.write("WAVE", 8); b.write("fmt ", 12); b.writeUInt32LE(20, 16);
+  b.writeUInt16LE(format, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(rate, 24); b.writeUInt32LE(Math.round(rate * 256 / 505), 28);
+  b.writeUInt16LE(256, 32); b.writeUInt16LE(format === 0x11 ? 4 : 16, 34); b.writeUInt16LE(2, 36); b.writeUInt16LE(505, 38);
+  b.write("fact", 40); b.writeUInt32LE(4, 44); b.writeUInt32LE(blocks * 505, 48); b.write("data", 52); b.writeUInt32LE(blocks * 256, 56);
+  return b;
+};
+const upload = async (name, size, opts) => {
   const fd = new FormData();
-  fd.append("file", new Blob([Buffer.alloc(size, 1)]), name);
+  fd.append("file", new Blob([opts === "junk" ? Buffer.alloc(size, 1) : adpcmWav(size, opts)]), name);
   const r = await fetch(base + "/api/sounds", { method: "POST", body: fd });
   return { code: r.status, body: await r.json() };
 };
@@ -99,21 +108,38 @@ try {
     assert.equal((await post("/api/volume")).code, 400);
     await post("/api/volume", { level: String(before) });
   });
-  await step("upload and delete are refused while playing (409)", async () => {
-    await post("/api/play", { id: "assembly_yelp", loop: "1" });
-    assert.equal((await upload("x.wav", 4000)).code, 409);
-    assert.equal((await post("/api/sounds/delete", { id: "cluck" })).code, 409);
-    await post("/api/stop");
-  }, { risky: true });
-  await step("upload rules: bad name 400, too big 413, ok then delete, unknown delete 404", async () => {
+  // Uploads go to the SD card (F03 on F12). The mock needs its card on; the board needs one in.
+  if (onMock) await post("/api/mock/sd", { on: "1" });
+  await step("upload rules: bad name 400, not ADPCM 400, built-in id 409, ok then replace, delete, unknown 404", async () => {
     assert.equal((await upload("Bad Name.wav", 4000)).code, 400);
-    assert.equal((await upload("big.wav", 2 * 1024 * 1024)).code, 413);
+    assert.equal((await upload("junk.wav", 4000, "junk")).code, 400);
+    assert.equal((await upload("pcm.wav", 4000, { format: 1 })).code, 400);
+    assert.equal((await upload("fast.wav", 4000, { rate: 44100 })).code, 400);
+    assert.equal((await upload("cluck.wav", 4000)).code, 409);
+    const before = (await get("/api/sounds")).length;
     assert.equal((await upload("owl_hoot.wav", 4000)).code, 200);
-    assert.equal((await get("/api/sounds")).length, 17);
+    let list = await get("/api/sounds");
+    assert.equal(list.length, before + 1);
+    assert.equal(list.find((s) => s.id === "owl_hoot").group, "mine");
+    assert.equal((await upload("owl_hoot.wav", 6000)).code, 200);
+    assert.equal((await get("/api/sounds")).length, before + 1);
+    assert.equal((await post("/api/sounds/delete", { id: "cluck" })).code, 400);
     assert.equal((await post("/api/sounds/delete", { id: "owl_hoot" })).code, 200);
     assert.equal((await post("/api/sounds/delete", { id: "owl_hoot" })).code, 404);
-    assert.equal((await get("/api/sounds")).length, 16);
+    assert.equal((await get("/api/sounds")).length, before);
   }, { risky: true });
+  await step("an upload while a built-in plays is fine; one that does not fit gets 413", async () => {
+    await post("/api/play", { id: "assembly_yelp", loop: "1" });
+    assert.equal((await upload("owl_hoot.wav", 4000)).code, 200);
+    await post("/api/stop");
+    await post("/api/repeat", { on: "0" });
+    assert.equal((await post("/api/sounds/delete", { id: "owl_hoot" })).code, 200);
+    if (onMock) {
+      await post("/api/mock/sd", { free: "40000" });
+      assert.equal((await upload("big.wav", 20000)).code, 413);
+    }
+  }, { risky: true });
+  if (onMock) await post("/api/mock/sd", { on: "" });
   await step("LED on motion (F13): in config, 0 or 1 only, saved, motion fields in status", async () => {
     const c = await get("/api/config");
     assert.ok(c.led_motion === 0 || c.led_motion === 1);
