@@ -31,7 +31,10 @@ static void report(fs::FS &fs, uint64_t cardSize, uint64_t total, uint64_t used,
 
 static bool tryMmc() {
   SD_MMC.setPins(14, 15, 2);
-  if (!SD_MMC.begin("/sdcard", true /*1-bit*/)) { result += "SD_MMC 1-bit (CLK14 CMD15 D0 2): no mount\n"; return false; }
+#ifndef PROBE_FORMAT
+#define PROBE_FORMAT false  // build with -DPROBE_FORMAT=true to format a card that has no file system
+#endif
+  if (!SD_MMC.begin("/sdcard", true /*1-bit*/, PROBE_FORMAT)) { result += "SD_MMC 1-bit (CLK14 CMD15 D0 2): no mount\n"; return false; }
   if (SD_MMC.cardType() == CARD_NONE) { result += "SD_MMC: no card\n"; SD_MMC.end(); return false; }
   report(SD_MMC, SD_MMC.cardSize(), SD_MMC.totalBytes(), SD_MMC.usedBytes(), "SD_MMC 1-bit CLK14 CMD15 D0=2");
   return true;
