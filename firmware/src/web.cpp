@@ -89,11 +89,15 @@ const char *btState() {
 String statusJson() {
   player::Stats p = player::stats();
   String j;
-  j.reserve(420);
+  j.reserve(460);
   j += "{\"bt\":\"";
   j += btState();
   j += "\",\"speaker\":";
   jsonStr(j, bt::speakerName().c_str());
+  j += ",\"stream\":\"";
+  j += bt::stream();
+  j += "\",\"error\":";
+  jsonStr(j, bt::error().c_str());
   j += ",\"playing\":";
   j += p.playing ? "true" : "false";
   j += ",\"current\":";
@@ -207,6 +211,11 @@ void handleConnect(AsyncWebServerRequest *req) {
   // is selectable by address; one with no address (rare) is found by name after a restart.
   String name = param(req, "name"), addr = param(req, "addr");
   if (name.isEmpty() && addr.isEmpty()) return sendError(req, 400, "missing addr (use /api/bt/forget to clear)");
+  unsigned b[6];
+  char tail;
+  if (!addr.isEmpty() && (addr.length() != 17 || sscanf(addr.c_str(), "%2x:%2x:%2x:%2x:%2x:%2x%c", &b[0], &b[1], &b[2],
+                                                         &b[3], &b[4], &b[5], &tail) != 6))
+    return sendError(req, 400, "addr must look like aa:bb:cc:dd:ee:ff");
   if (name.length() > 32) return sendError(req, 400, "name too long");
   if (name.isEmpty()) name = addr;  // shown in the header until the speaker says its name
   Serial.printf("connect requested: \"%s\" %s\n", name.c_str(), addr.c_str());

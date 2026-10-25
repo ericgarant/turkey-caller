@@ -315,7 +315,7 @@ async function tapCall(s){
   if(!st.speaker){toast("Connect a speaker first");return}
   if(st.playing&&st.current===s.id)return stop();   // tap a playing call to stop it
   const loop=$("loopSw").checked;
-  Object.assign(st,{playing:true,current:s.id,pos_ms:0,len_ms:s.ms,loop});stAt=Date.now();paintPlaying();
+  Object.assign(st,{playing:true,current:s.id,pos_ms:0,len_ms:s.ms,loop,error:""});stAt=Date.now();paintPlaying();  // the board clears error on a tap too, so the same error shows again next time
   try{
     const r=await api("/api/play",{id:s.id,loop:loop?1:0});
     // 202: the speaker was asleep or out of reach; the board wakes it and plays (or reports why not)
@@ -377,7 +377,8 @@ $("scanBtn").onclick=async()=>{
 };
 async function useSpeaker(d){
   try{await api("/api/bt/connect",{addr:d.addr||"",name:d.name});
-    st.bt="connecting";st.speaker=d.name||d.addr;paint();toast("Connecting to "+(d.name||d.addr))}
+    st.bt="connecting";st.speaker=d.name||d.addr;paint();toast("Connecting to "+(d.name||d.addr));
+    if(!d.addr){restarting=Date.now();lastOk=Date.now()}}  // no address: the board restarts to find it by name
   catch(e){toast(why(e))}
 }
 const forget=$("forgetBtn");

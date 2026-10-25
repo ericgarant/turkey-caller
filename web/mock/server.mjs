@@ -166,6 +166,7 @@ const server = http.createServer(async (req, res) => {
     case "GET /api/bt/devices": return json(res, 200, { scanning, devices });
     case "POST /api/bt/connect": {
       if (!p.name && !p.addr) return fail(res, 400, "missing addr");
+      if (p.addr && !/^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(p.addr)) return fail(res, 400, "addr must look like aa:bb:cc:dd:ee:ff");
       Object.assign(st, { bt: "connecting", stream: "down", error: "", speaker: p.name || p.addr }); push();
       setTimeout(() => { Object.assign(st, { bt: "connected", stream: "ready" }); push(); }, 2500);
       return ok(res);

@@ -282,24 +282,22 @@ void savePrefs(const char *name) {
 
 // Pending tap: wake the stream (or the link), play once it runs, or give up after 8 s.
 void wakeLoop(uint32_t now) {
+  bool ready = a2dp.is_connected() && audioStarted;
+  // Take the pending tap and clear it in one step, so a tap arriving meanwhile isn't lost.
   portENTER_CRITICAL(&lock);
   Pending p = pending;
+  bool expired = p.active && !ready && now - p.sinceMs > kWakeGiveUpMs;
+  if (p.active && (ready || expired)) pending.active = false;
   portEXIT_CRITICAL(&lock);
   if (!p.active) return;
-  if (a2dp.is_connected() && audioStarted) {
-    portENTER_CRITICAL(&lock);
-    pending.active = false;
-    portEXIT_CRITICAL(&lock);
+  if (ready) {
     wakeAskedMs = 0;
     tapMs = millis() | 1;  // share the radio for the call
     Serial.printf("speaker awake after %u ms, playing %s\n", (unsigned)(now - p.sinceMs), p.id);
     player::play(p.id, p.loop, kPreRollMs);
     return;
   }
-  if (now - p.sinceMs > kWakeGiveUpMs) {
-    portENTER_CRITICAL(&lock);
-    pending.active = false;
-    portEXIT_CRITICAL(&lock);
+  if (expired) {
     wakeAskedMs = 0;
     setError("Speaker did not answer");
     Serial.printf("speaker did not answer in %u ms, dropping %s\n", (unsigned)kWakeGiveUpMs, p.id);

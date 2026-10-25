@@ -146,6 +146,7 @@ try {
     assert.deepEqual([s.playing, s.bt], [false, "idle"]);
     assert.equal((await post("/api/play", { id: "cluck" })).code, 409);
     assert.equal((await post("/api/bt/connect", { addr: "", name: "" })).code, 400);
+    assert.equal((await post("/api/bt/connect", { addr: "5C:49:7D", name: "Level Box Slim" })).code, 400);
     assert.equal((await post("/api/bt/connect", { addr: "5C:49:7D:1A:20:8E", name: "Level Box Slim" })).code, 200);
     assert.equal((await get("/api/status")).bt, "connecting");
     await sleep(2800);
