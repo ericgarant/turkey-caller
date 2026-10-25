@@ -12,6 +12,7 @@ namespace {
 constexpr size_t kMaxSounds = 64;      // built-ins, packs and uploads together (F14)
 constexpr size_t kMaxIndexBytes = 4096;  // each index.json is read whole; keep it small (F10)
 constexpr size_t kMaxPacks = 8;
+constexpr uint32_t kMaxPackClipMs = 60000;  // F14: pack clips up to 60 s each
 
 Sound *sounds = nullptr;  // exactly `n` entries, in PSRAM when the board has it (F14)
 size_t n = 0;
@@ -191,6 +192,10 @@ void begin() {
     char file[56];
     path(s, file, sizeof(file));
     if (!probe(fs, file, s)) return;  // missing or broken: not listed
+    if (s.card && s.ms > kMaxPackClipMs) {
+      Serial.printf("sound %s skipped: %u s long, packs take 60 s at most\n", file, (unsigned)(s.ms / 1000));
+      return;
+    }
     if (e.name[0]) strlcpy(s.name, e.name, sizeof(s.name));
     else defaultName(e.id, s.name, sizeof(s.name));
     strlcpy(s.animal, knownAnimal(e.animal) ? e.animal : "turkey", sizeof(s.animal));
