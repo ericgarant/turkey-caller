@@ -6,7 +6,9 @@
   "scripts": {
     "mock": "node mock/server.mjs",
     "build": "python3 build.py",
-    "test": "node test/api.mjs && node test/smoke.mjs",
+    "test": "node test/api.mjs && node test/features.mjs && node test/smoke.mjs && node test/phones.mjs",
+    "test:features": "node test/features.mjs",
+    "test:phones": "node test/phones.mjs",
     "test:api": "node test/api.mjs",
     "stress": "node test/stress.mjs"
   },

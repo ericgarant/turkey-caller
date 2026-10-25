@@ -19,7 +19,7 @@ const sounds = [
   ["cluck_purr", "Cluck & purr", "soft", 4800], ["whine", "Whine", "soft", 5000],
   ["plain_yelp", "Plain yelp", "loud", 3600], ["assembly_yelp", "Assembly yelp", "loud", 8400],
   ["cutting", "Cutting", "loud", 4200], ["fly_down_cackle", "Fly-down cackle", "loud", 3000],
-  ["kee_kee_run", "Kee-kee run", "loud", 5200], ["gobble", "Gobble", "care", 2600], ["putt", "Putt", "care", 1200],
+  ["gobble", "Gobble", "care", 2600], ["putt", "Putt", "care", 1200],
   ["dindon_purr", "Purr & clucks", "pack", 7500], ["dindon_yelp", "Yelp", "pack", 3200],
   ["dindon_fast_yelp", "Fast yelp", "pack", 3100], ["dindon_kee_kee", "Kee-kee run", "pack", 3800],
   ["dindon_gobble", "Gobble", "pack", 2900],
@@ -35,6 +35,7 @@ const NEARBY = [
 const cfg = { ap_ssid: "TurkeyCaller", ap_pass: "gobble123", device_name: "Turkey Caller" };
 const st = { bt: "connected", speaker: "Level Box Slim", playing: false, current: "", loop: false, repeat: false, volume: 70 };
 let playStart = 0, playTimer = null, scanning = false, devices = [];
+let busy = 0, busyUntil = 0;  // test hook (mock only): POST /api/mock/busy count=N (next N API calls) or ms=T (every API call for T ms) answers 503, like the board's busy window
 const boot = Date.now();
 
 function status() {
@@ -125,6 +126,9 @@ const server = http.createServer(async (req, res) => {
   const route = req.method + " " + url.pathname;
   if (process.env.MOCK_LOG) console.log(route, JSON.stringify(p));
 
+  if (route === "POST /api/mock/busy") { busy = +p.count || 0; busyUntil = Date.now() + (+p.ms || 0); return ok(res); }
+  if (url.pathname.startsWith("/api/") && (busy > 0 || Date.now() < busyUntil)) { if (busy > 0) busy--; return fail(res, 503, "busy, try again"); }
+
   switch (route) {
     case "GET /": case "GET /index.html":
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
@@ -178,7 +182,7 @@ const server = http.createServer(async (req, res) => {
 
 server.on("upgrade", (req, sock) => {
   if (req.url !== "/ws") return sock.destroy();
-  const accept = crypto.createHash("sha1").update(req.headers["sec-websocket-key"] + "258EAFA5-E914-47DA-95CA-C5AB0DC11B85").digest("base64");
+  const accept = crypto.createHash("sha1").update(req.headers["sec-websocket-key"] + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest("base64");
   sock.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
   sockets.add(sock);
   let pending = Buffer.alloc(0);

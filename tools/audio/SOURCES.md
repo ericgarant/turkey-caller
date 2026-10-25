@@ -1,6 +1,7 @@
 # Turkey call audio: sources and licenses
 
-## Recommended set (11 calls, one clean labeled clip each)
+## Recommended set (10 calls, one clean labeled clip each)
+Kee_Kee_Run.mp3 was dropped (Oct 2026, Eric's call) to make room for the Dindon pack, which has its own kee-kee run.
 Source page: https://www.dnr.sc.gov/wildlife/turkey/sound/turkeysound_index.html
 Credit: "All audio courtesy National Wild Turkey Federation" (nwtf.org). Page footer: "(c) 2020 All rights reserved". No open license.
 => Fine for a personal device. Do NOT commit these files to a public repo; keep the repo private or git-ignore `data/*.mp3` and fetch with the script.
@@ -14,7 +15,6 @@ Credit: "All audio courtesy National Wild Turkey Federation" (nwtf.org). Page fo
 | cutting.mp3 | Cutting (excited hen) | Cutting_Hen.mp3 |
 | assembly_yelp.mp3 | Adult hen assembly call | Assembly_Call.mp3 |
 | fly_down_cackle.mp3 | Fly-down cackle | Fly_Down_Cackle.mp3 |
-| kee_kee_run.mp3 | Kee-kee run | Kee_Kee_Run.mp3 |
 | purr.mp3 | Purr | Purr.mp3 |
 | cluck_purr.mp3 | Cluck and purr | Cluck_Purr.mp3 |
 | gobble.mp3 | Gobbling | Gobbling.mp3 |
@@ -49,13 +49,18 @@ IMA ADPCM 22.05 kHz.
 
 | ESP32 file | Shown as | Source track | Cut | Clip | What it is (by analysis, confirm by ear) |
 |---|---|---|---|---|---|
-| dindon_purr.wav | Purr & clucks | 01_Dindon_Purr.mp3 (44 s) | 2.9 s + 7.7 s | 7.5 s, 83 KB | Soft rolling purrs with a few single clucks |
+| dindon_purr.wav | Purr & clucks | 01_Dindon_Purr.mp3 (44 s) | 2.9 s + 3.9 s | 3.7 s, 41 KB | Soft purr, a single cluck, soft purr |
 | dindon_yelp.wav | Yelp | 03_Dindon_Yelp1.mp3 (19 s) | 6.2 s + 3.3 s | 3.2 s, 35 KB | Plain hen yelp, about 8 notes, steady pace |
 | dindon_fast_yelp.wav | Fast yelp | 04_Dindon_Yelp2.mp3 (24 s) | 2.5 s + 3.2 s | 3.1 s, 34 KB | Louder, faster, nearly continuous yelping (excited yelp) |
 | dindon_kee_kee.wav | Kee-kee run | 05_Dondon_KeeKee.mp3 (15 s) | 2.55 s + 3.9 s | 3.8 s, 42 KB | High whistles (~1.6 kHz) ending in yelps |
 | dindon_gobble.wav | Gobble | 02_Dindon_Glou.mp3 (56 s, "GlouGlou") | 5.0 s + 3.2 s | 2.9 s, 33 KB | One long gobble |
 
-Total 221 KB (~20 s of audio). The full tracks would be ~1.7 MB as ADPCM, more than the whole 1.375 MB LittleFS.
+Total 181 KB (~17 s of audio). The full tracks would be ~1.7 MB as ADPCM, more than the whole 1.375 MB LittleFS.
+
+Flash budget, from the board (Oct 2026): the 12 built-ins took 1,323,008 of 1,441,792 bytes (118,784 free; most
+clips are capped at 10 s, ~111 KB each; LittleFS adds ~4.4 KB per file). The pack (181 KB + overhead ~ 203 KB) did not
+fit, so the built-in kee-kee run (110,830 bytes) was dropped and the purr cut to one 3.7 s take. Expected free after:
+about 27 KB.
 
 ### When to use them
 | Call | Meaning | When hunters use it |

@@ -18,9 +18,9 @@ try {
 
   const step = async (name, fn) => { await fn(); console.log("ok -", name); };
 
-  await step("shows the 17 calls in four groups", async () => {
+  await step("shows the 16 calls in four groups", async () => {
     await page.waitForSelector(".call");
-    assert.equal(await page.locator(".call").count(), 17);
+    assert.equal(await page.locator(".call").count(), 16);
     assert.deepEqual(await page.locator("#groups h2").allTextContents(), ["Soft calls", "Louder calls", "Use with care", "Dindon pack"]);
   });
   await step("speaker pill shows the connected speaker", async () => {
@@ -63,7 +63,7 @@ try {
   });
   await step("settings show sounds, storage and Wi-Fi name", async () => {
     await page.click('nav [data-go="settings"]');
-    assert.equal(await page.locator("#sndList li").count(), 17);
+    assert.equal(await page.locator("#sndList li").count(), 16);
     assert.match(await page.textContent("#fsText"), /used of 1408 KB/);
     assert.equal(await page.inputValue("#apSsid"), "TurkeyCaller");
   });

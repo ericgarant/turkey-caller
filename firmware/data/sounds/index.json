@@ -8,7 +8,6 @@
   {"id": "assembly_yelp", "name": "Assembly yelp", "group": "loud"},
   {"id": "cutting", "name": "Cutting", "group": "loud"},
   {"id": "fly_down_cackle", "name": "Fly-down cackle", "group": "loud"},
-  {"id": "kee_kee_run", "name": "Kee-kee run", "group": "loud"},
   {"id": "gobble", "name": "Gobble", "group": "care"},
   {"id": "putt", "name": "Putt", "group": "care"},
   {"id": "dindon_purr", "name": "Purr & clucks", "group": "pack"},

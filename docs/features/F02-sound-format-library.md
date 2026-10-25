@@ -7,7 +7,7 @@
 - Mono IMA ADPCM WAV (`WAVE_FORMAT_IMA_ADPCM`, 4 bits per sample), **22.05 kHz**, half the A2DP rate of 44.1 kHz, about 11 KB per second. Clip files end in `.wav`.
 - The firmware upsamples to 44.1 kHz; 16-bit PCM WAV (8 to 44.1 kHz) stays playable as in Phase 0, for development only (files placed with `uploadfs`; refused on phone upload, see F03).
 - The file names are the ids: lowercase `a-z0-9_`, at most 24 characters, for example `tree_call.wav`.
-- `tools/audio/fetch_turkey_audio.sh` produces the 12 clips in this format, plus the 5 Dindon pack clips from Eric's MP3s in `tools/audio/local/`; the clips are never committed.
+- `tools/audio/fetch_turkey_audio.sh` produces the 11 built-in clips in this format (kee-kee run dropped for room), plus the 5 Dindon pack clips from Eric's MP3s in `tools/audio/local/`; the clips are never committed.
 
 ## Library
 
