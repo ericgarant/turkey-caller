@@ -45,9 +45,10 @@ void begin() {
     Serial.println("settings: NVS not available, using defaults");
     return;
   }
-  String s = prefs.getString("ssid", kDefaultSsid);
-  String p = prefs.getString("pass", kDefaultPass);
-  String n = prefs.getString("name", kDefaultName);
+  // isKey() first: getString() of a missing key logs a NOT_FOUND error on serial (B10).
+  String s = prefs.isKey("ssid") ? prefs.getString("ssid") : String(kDefaultSsid);
+  String p = prefs.isKey("pass") ? prefs.getString("pass") : String(kDefaultPass);
+  String n = prefs.isKey("name") ? prefs.getString("name") : String(kDefaultName);
   prefs.end();
   // A value that no longer passes the rules (should not happen) falls back to its default.
   if (!validate(s, p, n)) {
