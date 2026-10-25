@@ -5,6 +5,7 @@
 #include "bt.h"
 #include "heapmon.h"
 #include "library.h"
+#include "motion.h"
 #include "player.h"
 #include "sdcard.h"
 #include "settings.h"
@@ -29,6 +30,7 @@ void setup() {
 
   sdcard::begin();    // F12: recordings on the SD card (WROVER-E); none on the WROOM board
   settings::begin();  // Wi-Fi name, password, device name (F05); before Bluetooth and Wi-Fi use them
+  motion::begin();    // F13: PIR on GPIO 13, LED on GPIO 33 (WROVER-E)
   library::begin();  // sound list: built-ins from /sounds/index.json, then the card's recordings
   heapLog("boot");
   player::begin();
@@ -46,6 +48,7 @@ void loop() {
   web::loop();
   player::loop();
   bt::loop();
+  motion::loop();
 
   static uint32_t last = 0;
   if (millis() - last >= 5000) {

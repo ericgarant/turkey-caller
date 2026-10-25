@@ -12,6 +12,7 @@ constexpr size_t kSsidMax = 32, kPassMin = 8, kPassMax = 63, kNameMax = 24;
 char ssid[kSsidMax + 1];
 char pass[kPassMax + 1];
 char name[kNameMax + 1];
+volatile bool led = true;
 volatile uint32_t revNow = 1;
 
 bool hasControl(const String &s) {
@@ -31,6 +32,7 @@ void setDefaults() {
   strlcpy(ssid, kDefaultSsid, sizeof(ssid));
   strlcpy(pass, kDefaultPass, sizeof(pass));
   strlcpy(name, kDefaultName, sizeof(name));
+  led = true;
 }
 
 }  // namespace
@@ -49,7 +51,9 @@ void begin() {
   String s = prefs.isKey("ssid") ? prefs.getString("ssid") : String(kDefaultSsid);
   String p = prefs.isKey("pass") ? prefs.getString("pass") : String(kDefaultPass);
   String n = prefs.isKey("name") ? prefs.getString("name") : String(kDefaultName);
+  bool ledSaved = prefs.isKey("ledm") ? prefs.getUChar("ledm") != 0 : true;
   prefs.end();
+  led = ledSaved;
   // A value that no longer passes the rules (should not happen) falls back to its default.
   if (!validate(s, p, n)) {
     strlcpy(ssid, s.c_str(), sizeof(ssid));
@@ -58,12 +62,14 @@ void begin() {
   } else {
     Serial.println("settings: saved values are invalid, using defaults");
   }
-  Serial.printf("settings: Wi-Fi \"%s\", device \"%s\", %s password\n", ssid, name, defaultPass() ? "factory" : "own");
+  Serial.printf("settings: Wi-Fi \"%s\", device \"%s\", %s password, LED on motion %s\n", ssid, name,
+                defaultPass() ? "factory" : "own", led ? "on" : "off");
 }
 
 const char *apSsid() { return ssid; }
 const char *apPass() { return pass; }
 const char *deviceName() { return name; }
+bool ledMotion() { return led; }
 bool defaultPass() { return strcmp(pass, kDefaultPass) == 0; }
 uint32_t rev() { return revNow; }
 
@@ -79,16 +85,18 @@ const char *validate(const String &s, const String &p, const String &n) {
   return nullptr;
 }
 
-void save(const String &s, const String &p, const String &n, bool *changed, bool *wifiChanged) {
+void save(const String &s, const String &p, const String &n, int ledMotion, bool *changed, bool *wifiChanged) {
   bool ssidNew = s != ssid, passNew = !p.isEmpty() && p != pass, nameNew = n != name;
+  bool ledNew = ledMotion >= 0 && (ledMotion != 0) != led;
   *wifiChanged = ssidNew || passNew;
-  *changed = *wifiChanged || nameNew;
+  *changed = *wifiChanged || nameNew || ledNew;
   if (!*changed) return;
   Preferences prefs;
   if (prefs.begin("cfg", false)) {
     if (ssidNew) prefs.putString("ssid", s);
     if (passNew) prefs.putString("pass", p);
     if (nameNew) prefs.putString("name", n);
+    if (ledNew) prefs.putUChar("ledm", ledMotion ? 1 : 0);
     prefs.end();
   } else {
     Serial.println("settings: NVS not available, change kept until restart only");
@@ -96,10 +104,11 @@ void save(const String &s, const String &p, const String &n, bool *changed, bool
   if (ssidNew) strlcpy(ssid, s.c_str(), sizeof(ssid));
   if (passNew) strlcpy(pass, p.c_str(), sizeof(pass));
   if (nameNew) strlcpy(name, n.c_str(), sizeof(name));
+  if (ledNew) led = ledMotion != 0;
   revNow = revNow + 1;
   if (revNow == 0 || revNow > 0x7fffffff) revNow = 1;
-  Serial.printf("settings saved:%s%s%s (rev %u)\n", ssidNew ? " Wi-Fi name" : "", passNew ? " password" : "",
-                nameNew ? " device name" : "", (unsigned)revNow);
+  Serial.printf("settings saved:%s%s%s%s (rev %u)\n", ssidNew ? " Wi-Fi name" : "", passNew ? " password" : "",
+                nameNew ? " device name" : "", ledNew ? (led ? " LED on motion on" : " LED on motion off") : "", (unsigned)revNow);
 }
 
 void resetDefaults() {

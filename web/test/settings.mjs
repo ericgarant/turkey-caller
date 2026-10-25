@@ -45,6 +45,14 @@ try {
     assert.equal(await a.isVisible("#offline"), false);
     assert.equal(await b.isVisible("#offline"), false);
   });
+  await step("LED on motion (F13): the switch saves at once and shows on the other phone", async () => {
+    assert.equal(await a.isChecked("#ledSw"), true);
+    await a.click("#ledSw");
+    await b.waitForFunction(() => !document.getElementById("ledSw").checked, null, within(1000));
+    await b.click("#ledSw");
+    await a.waitForFunction(() => document.getElementById("ledSw").checked, null, within(1000));
+    assert.equal(await a.isVisible("#offline"), false);
+  });
   await step("a save costs one config reload, on the other phone only (issue #8 heap)", async () => {
     const gets = { a: 0, b: 0 };
     const count = (k) => (r) => { if (r.method() === "GET" && r.url().endsWith("/api/config")) gets[k]++; };

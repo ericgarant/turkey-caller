@@ -194,6 +194,7 @@ nav button[aria-current="page"]{color:var(--accent)}
       </div>
       <div>
         <h2>Device</h2>
+        <div class="card" id="ledCard" hidden><label class="loop" for="ledSw"><input class="switch" type="checkbox" id="ledSw"> Light the LED when the motion sensor sees movement</label><span class="sub">Turn it off where a light would give you away.</span></div>
         <div class="card"><dl id="devInfo"></dl></div>
       </div>
     </section>
@@ -580,6 +581,8 @@ async function loadConfig(){
     if(first||!dirty)$(inp).value=c[k]||"";
   }
   cfg=c;
+  // F13: "LED on motion" saves on its own, straight away; boards without the setting hide it.
+  $("ledCard").hidden=c.led_motion==null;if(c.led_motion!=null&&!ledBusy)$("ledSw").checked=!!+c.led_motion;
   for(const f of changed){$(f).classList.add("changed");setTimeout(()=>$(f).classList.remove("changed"),2500)}
   if(changed.length||kept.length){
     $("cfgOtherText").innerHTML=kept.length?`<b>The other phone changed ${esc(kept.join(" and "))}.</b> Your edit is kept; saving will replace it.`:"<b>Updated from the other phone.</b>";
@@ -589,6 +592,12 @@ async function loadConfig(){
   cfgPaint();
 }
 for(const id of ["apSsid","apPass","devName"])$(id).addEventListener("input",()=>{cfgPaint()});
+let ledBusy=false;
+$("ledSw").onchange=async()=>{
+  if(!cfg)return;const on=$("ledSw").checked;ledBusy=cfgBusy=true;
+  try{await api("/api/config",{led_motion:on?"1":"0",rev:cfg.rev});cfg=Object.assign({},cfg,{led_motion:on?1:0,rev:cfg.rev+1});toast(on?"LED on motion: on":"LED on motion: off")}
+  catch(e){$("ledSw").checked=!on;toast(/changed on another phone|409/i.test(e.message)?"The other phone just changed the settings. Try again.":why(e));ledBusy=cfgBusy=false;await loadConfig()}
+  ledBusy=cfgBusy=false;cfgPaint()};
 $("pwShow").onclick=()=>{const v=$("apPass").type==="password";$("apPass").type=v?"text":"password";$("pwShow").textContent=v?"Hide":"Show";$("pwShow").setAttribute("aria-pressed",v)};
 $("cfgForm").onsubmit=async e=>{
   e.preventDefault();

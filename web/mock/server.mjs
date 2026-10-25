@@ -44,7 +44,7 @@ const NEARBY = [
   { name: "", addr: "00:1A:7D:DA:71:13", rssi: -88 }, // nameless: Phase 0 cannot pick it
 ];
 
-const DEFAULTS = { ap_ssid: "TurkeyCaller", ap_pass: "gobble123", device_name: "Turkey Caller" };
+const DEFAULTS = { ap_ssid: "TurkeyCaller", ap_pass: "gobble123", device_name: "Turkey Caller", led_motion: 1 };
 const cfg = { ...DEFAULTS };
 // Like the board: a random non-zero rev at each boot, +1 on every saved change (F05)
 const newRev = () => 1 + crypto.randomInt(0x7ffffffe);
@@ -56,6 +56,8 @@ let speakerMode = "on", wakeTimer = null;
 let playStart = 0, playTimer = null, scanning = false, devices = [];
 let busy = 0, busyUntil = 0;  // test hook (mock only): POST /api/mock/busy count=N (next N API calls) or ms=T (every API call for T ms) answers 503, like the board's busy window
 const boot = Date.now();
+// Motion sensor (F13): POST /api/mock/motion on=1|0 drives the PIR.
+let motionNow = false, motionAt = 0;
 
 // SD card (F12): present when a pack is inserted or the card is set on; POST /api/mock/sd on=0|1 (empty = flash only again).
 // Off by default so the older tests see a board with flash only (no sd fields); on=1 gives a 1 GB card, on=0 no card.
@@ -75,7 +77,7 @@ function status() {
   return {
     ...st, cfg: rev, pos_ms: pos, len_ms: len, plays: 0, underruns: 0,
     heap: 70000 + Math.round(Math.random() * 3000), minHeap: 52880, maxBlock: 40000,
-    fsFree: FS_TOTAL - used, fsTotal: FS_TOTAL, ...sdStatus(), clients: sockets.size || 1,
+    fsFree: FS_TOTAL - used, fsTotal: FS_TOTAL, ...sdStatus(), motion: !!motionNow, motionAt, clients: sockets.size || 1,
     uptime: Math.floor((Date.now() - boot) / 1000) + 4380, version: "mock",
   };
 }
@@ -185,6 +187,7 @@ const server = http.createServer(async (req, res) => {
     if (p.on === "1") sounds.push(...pack.map((c) => ({ ...c })));
     return ok(res);
   }
+  if (route === "POST /api/mock/motion") { motionNow = p.on === "1"; if (motionNow) motionAt = Math.floor((Date.now() - boot) / 1000) + 4380; push(); return ok(res); }
   if (route === "POST /api/mock/busy") { busy = +p.count || 0; busyUntil = Date.now() + (+p.ms || 0); return ok(res); }
   if (url.pathname.startsWith("/api/") && (busy > 0 || Date.now() < busyUntil)) { if (busy > 0) busy--; return fail(res, 503, "busy, try again"); }
 
@@ -223,7 +226,7 @@ const server = http.createServer(async (req, res) => {
     }
     case "POST /api/bt/forget": stop(); Object.assign(st, { bt: "idle", stream: "down", error: "", speaker: "" }); push(); return ok(res);
     case "GET /api/config":
-      return json(res, 200, { ap_ssid: cfg.ap_ssid, device_name: cfg.device_name, default_pass: cfg.ap_pass === DEFAULTS.ap_pass, rev });
+      return json(res, 200, { ap_ssid: cfg.ap_ssid, device_name: cfg.device_name, led_motion: cfg.led_motion, default_pass: cfg.ap_pass === DEFAULTS.ap_pass, rev });
     case "POST /api/config": {
       if (p.rev !== undefined && +p.rev !== rev) return fail(res, 409, "changed on another phone");
       const ssid = p.ap_ssid ?? cfg.ap_ssid, name = p.device_name ?? cfg.device_name, pass = p.ap_pass || "";
@@ -232,6 +235,8 @@ const server = http.createServer(async (req, res) => {
       if (!name || bytes(name) > 24) return fail(res, 400, "device name must be 1 to 24 characters");
       if (pass && /[^\x20-\x7e]/.test(pass)) return fail(res, 400, "password must be printable ASCII");
       if (pass && (bytes(pass) < 8 || bytes(pass) > 63)) return fail(res, 400, "password must be 8 to 63 characters");
+      if (p.led_motion !== undefined && p.led_motion !== "0" && p.led_motion !== "1") return fail(res, 400, "led_motion must be 0 or 1");
+      if (p.led_motion !== undefined) cfg.led_motion = +p.led_motion;  // F13
       const wifi = ssid !== cfg.ap_ssid || (pass && pass !== cfg.ap_pass);
       Object.assign(cfg, { ap_ssid: ssid, device_name: name }, pass ? { ap_pass: pass } : {});
       rev++;

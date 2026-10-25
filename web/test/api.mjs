@@ -114,6 +114,20 @@ try {
     assert.equal((await post("/api/sounds/delete", { id: "owl_hoot" })).code, 404);
     assert.equal((await get("/api/sounds")).length, 16);
   }, { risky: true });
+  await step("LED on motion (F13): in config, 0 or 1 only, saved, motion fields in status", async () => {
+    const c = await get("/api/config");
+    assert.ok(c.led_motion === 0 || c.led_motion === 1);
+    const s = await get("/api/status");
+    assert.equal(typeof s.motion, "boolean");
+    assert.equal(typeof s.motionAt, "number");
+    assert.equal((await post("/api/config", { led_motion: "2" })).code, 400);
+    assert.equal((await post("/api/config", { led_motion: c.led_motion ? "0" : "1", rev: String(c.rev) })).code, 200);
+    const c2 = await get("/api/config");
+    assert.equal(c2.led_motion, c.led_motion ? 0 : 1);
+    assert.notEqual(c2.rev, c.rev);
+    assert.equal((await post("/api/config", { led_motion: "1", rev: String(c.rev) })).code, 409);
+    assert.equal((await post("/api/config", { led_motion: String(c.led_motion), rev: String(c2.rev) })).code, 200);
+  }, { risky: true });
   await step("config validation: short password and long name refused, password never returned", async () => {
     assert.equal((await post("/api/config", { ap_ssid: "Turk", ap_pass: "short" })).code, 400);
     assert.equal((await post("/api/config", { ap_ssid: "x".repeat(33) })).code, 400);

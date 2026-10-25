@@ -8,6 +8,7 @@
 #include "bt.h"
 #include "heapmon.h"
 #include "library.h"
+#include "motion.h"
 #include "player.h"
 #include "sdcard.h"
 #include "settings.h"
@@ -135,6 +136,9 @@ String statusJson() {
   j += ",\"plays\":" + String(p.plays);
   j += ",\"underruns\":" + String(p.underruns);
   j += ",\"stalls\":" + String(p.stalls);
+  j += ",\"motion\":";  // F13
+  j += motion::active() ? "true" : "false";
+  j += ",\"motionAt\":" + String(motion::lastAt());
   j += ",\"cfg\":" + String(settings::rev());
   j += ",\"version\":\"" FW_VERSION "\"}";
   return j;
@@ -257,6 +261,8 @@ void handleConfigGet(AsyncWebServerRequest *req) {
   jsonStr(j, settings::deviceName());
   j += ",\"default_pass\":";
   j += settings::defaultPass() ? "true" : "false";
+  j += ",\"led_motion\":";
+  j += settings::ledMotion() ? "1" : "0";  // F13
   j += ",\"rev\":" + String(settings::rev()) + "}";
   req->send(200, "application/json", j);
 }
@@ -281,13 +287,19 @@ void handleConfigPost(AsyncWebServerRequest *req) {
   String ssid = hasParam(req, "ap_ssid") ? param(req, "ap_ssid") : String(settings::apSsid());
   String name = hasParam(req, "device_name") ? param(req, "device_name") : String(settings::deviceName());
   String pass = param(req, "ap_pass");
+  int led = -1;  // F13: "LED on motion", 1 or 0; left out keeps it
+  if (hasParam(req, "led_motion")) {
+    String v = param(req, "led_motion");
+    if (v != "0" && v != "1") return sendError(req, 400, "led_motion must be 0 or 1");
+    led = v == "1";
+  }
   const char *err = settings::validate(ssid, pass, name);
   if (err) {
     Serial.printf("settings refused: %s\n", err);  // the message never contains the password
     return sendError(req, 400, err);
   }
   bool changed = false, wifi = false;
-  settings::save(ssid, pass, name, &changed, &wifi);
+  settings::save(ssid, pass, name, led, &changed, &wifi);
   pass = "";  // don't keep it around longer than needed
   req->send(200, "application/json", wifi ? "{\"ok\":true,\"restart\":true}" : "{\"ok\":true,\"restart\":false}");
   if (wifi) askRestart("settings");
@@ -408,13 +420,13 @@ struct Shown {
   char current[32];
   char stream[12];
   uint8_t errorLen;
-  bool playing, loop, repeat;
+  bool playing, loop, repeat, motion;
   uint8_t volume;
   int clients;
   size_t speakerLen;
   uint32_t cfg;
   bool operator!=(const Shown &o) const {
-    return strcmp(bt, o.bt) || strcmp(current, o.current) || strcmp(stream, o.stream) || errorLen != o.errorLen || playing != o.playing || loop != o.loop || repeat != o.repeat ||
+    return strcmp(bt, o.bt) || strcmp(current, o.current) || strcmp(stream, o.stream) || errorLen != o.errorLen || playing != o.playing || loop != o.loop || repeat != o.repeat || motion != o.motion ||
            volume != o.volume || clients != o.clients || speakerLen != o.speakerLen || cfg != o.cfg;
   }
 };
@@ -433,6 +445,7 @@ Shown shownNow() {
   s.clients = WiFi.softAPgetStationNum();
   s.speakerLen = bt::speakerName().length();
   s.cfg = settings::rev();
+  s.motion = motion::active();
   return s;
 }
 
