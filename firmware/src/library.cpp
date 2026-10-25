@@ -69,6 +69,10 @@ bool probe(fs::FS &fs, const char *id, Sound &s) {
   bool ok = wav::read(f, info, &why);
   s.bytes = f.size();
   f.close();
+  if (ok && (uint64_t)info.dataStart + info.dataBytes > s.bytes) {
+    ok = false;  // the player would hit a short read, which on the card means "card gone"
+    why = "audio data runs past the end of the file";
+  }
   if (!ok) {
     Serial.printf("sound %s skipped: %s\n", path, why);
     return false;

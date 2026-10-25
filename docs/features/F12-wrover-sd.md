@@ -23,9 +23,9 @@ Note the power source in the PR (Mac USB or a power bank). SD writes plus Wi-Fi 
 
 ## PSRAM
 
-- Turn it on (`BOARD_HAS_PSRAM`, `CONFIG_SPIRAM=y`, `CONFIG_SPIRAM_USE_MALLOC=y`). The WROVER-E is chip revision 3, so set `CONFIG_ESP32_REV_MIN_3=y` instead of the old `-mfix-esp32-psram-cache-issue` workaround. If the probe reports an older revision, keep the workaround.
+- Turn it on (`BOARD_HAS_PSRAM`, `CONFIG_SPIRAM=y`, `CONFIG_SPIRAM_USE_MALLOC=y`). The PSRAM cache workaround (`-mfix-esp32-psram-cache-issue`, the Arduino default) stays on, even though the WROVER-E is chip revision 3. Setting `CONFIG_ESP32_REV_MIN_3=y` made the board panic at boot ("Cache disabled but cached memory region accessed" in `esp_flash_init`), because the rebuilt libraries linked `memset` from flash into the flash driver.
 - Let Wi-Fi and lwIP allocate from PSRAM (`CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y`).
-- **Audio buffers stay internal, explicitly.** With `SPIRAM_USE_MALLOC`, a plain `malloc` of 16 KB or more goes to PSRAM, so the PCM ring and the decode buffers must be static arrays or `heap_caps_malloc(..., MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)`. Check them at boot with `esp_ptr_internal()` and log a line saying so. The Bluetooth controller is internal anyway.
+- **Audio buffers stay internal, explicitly.** With `SPIRAM_USE_MALLOC`, a plain `malloc` of 4 KB or more can go to PSRAM (the Arduino build sets `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096`; the IDF default is 16 KB), so the PCM ring and the decode buffers must be static arrays or `heap_caps_malloc(..., MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)`. Check them at boot with `esp_ptr_internal()` and log a line saying so. The Bluetooth controller is internal anyway.
 - Leave `CONFIG_BT_ALLOCATION_FROM_SPIRAM_FIRST` off in this PR. Moving the Bluedroid host to PSRAM is a later, measured try for #8, and it lands only if underruns stay at 0.
 - Leave the trimmed sdkconfig choices in place. Raise a Wi-Fi buffer count back up only if a measurement shows it helps.
 - **F10 on this board:** the 40 KB floor applies to *internal* heap (`heap_caps_get_free_size(MALLOC_CAP_INTERNAL)`). `/api/status` adds `psramFree`. `minHeap` and the `low=` serial value stay internal-only, so the numbers on #8 stay comparable.
