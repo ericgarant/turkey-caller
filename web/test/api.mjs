@@ -119,6 +119,8 @@ try {
     assert.equal(stale.code, 409);
     assert.equal((await get("/api/config")).device_name, c.device_name, "nothing saved on 409");
     assert.equal((await post("/api/config", { ap_ssid: c.ap_ssid, device_name: "x".repeat(25), rev: c.rev })).code, 400);
+    assert.equal((await post("/api/config", { ap_ssid: c.ap_ssid, device_name: "é".repeat(13), rev: c.rev })).code, 400, "limits are bytes");
+    assert.equal((await post("/api/config", { ap_ssid: c.ap_ssid, ap_pass: "motdepasseé", rev: c.rev })).code, 400, "password is ASCII");
     const r = await post("/api/config", { ap_ssid: c.ap_ssid, device_name: "Ridge blind", rev: c.rev });
     assert.deepEqual(r.body, { ok: true, restart: false });
     const c2 = await get("/api/config");

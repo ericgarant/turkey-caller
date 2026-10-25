@@ -40,10 +40,41 @@ try {
     await a.click("#cfgSave");
     await b.waitForFunction(() => document.getElementById("devName").value === "Ridge blind", null, within(1000));
     await b.waitForFunction(() => document.getElementById("brand").textContent === "Ridge blind", null, within(1000));
-    assert.equal(await a.textContent("#brand"), "Ridge blind");
+    await a.waitForFunction(() => document.getElementById("brand").textContent === "Ridge blind", null, within(1000));
     assert.equal(await b.isVisible("#cfgOther"), true);
     assert.equal(await a.isVisible("#offline"), false);
     assert.equal(await b.isVisible("#offline"), false);
+  });
+  await step("a save costs one config reload, on the other phone only (issue #8 heap)", async () => {
+    const gets = { a: 0, b: 0 };
+    const count = (k) => (r) => { if (r.method() === "GET" && r.url().endsWith("/api/config")) gets[k]++; };
+    const ca = count("a"), cb = count("b");
+    a.on("request", ca); b.on("request", cb);
+    await a.fill("#devName", "Pine ridge");
+    await a.click("#cfgSave");
+    await b.waitForFunction(() => document.getElementById("devName").value === "Pine ridge", null, within(1500));
+    await a.waitForTimeout(800);
+    a.off("request", ca); b.off("request", cb);
+    assert.deepEqual(gets, { a: 0, b: 1 });
+    assert.equal(await a.isDisabled("#cfgSave"), true, "saver's form is clean after the reload");
+    assert.equal(await a.isVisible("#cfgOther"), false, "own save is not reported as the other phone's");
+    await a.fill("#devName", "Pine ridge 2");  // a second save right away goes through (local rev +1)
+    await a.click("#cfgSave");
+    await b.waitForFunction(() => document.getElementById("devName").value === "Pine ridge 2", null, within(1500));
+  });
+  await step("password must be printable ASCII, refused inline", async () => {
+    await a.fill("#apPass", "motdepasseé");
+    await a.click("#cfgSave");
+    assert.match(await a.textContent("#fPass .err"), /no accents/);
+    await a.fill("#apPass", "");
+  });
+  await step("name limits count bytes like the board: accented letters take 2", async () => {
+    await a.fill("#devName", "é".repeat(13));  // 13 characters, 26 bytes
+    await a.click("#cfgSave");
+    assert.match(await a.textContent("#fName .err"), /accented letters count as 2/);
+    await a.fill("#devName", "é".repeat(12));  // 24 bytes: allowed
+    await a.click("#cfgSave");
+    await b.waitForFunction(() => document.getElementById("devName").value === "é".repeat(12), null, within(1500));
   });
   await step("an edit in progress is kept when the other phone saves, and flagged", async () => {
     await b.fill("#devName", "Creek bottom");
