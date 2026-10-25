@@ -301,7 +301,7 @@ const INFO={
   dindon_purr:["pack","Bird close and wary, calms it in"],dindon_yelp:["pack","Spring or fall, start soft, all day"],
   dindon_fast_yelp:["pack","Hung-up or henned-up gobbler"],dindon_kee_kee:["pack","Fall, 20 min after a flock scatters"],
   dindon_gobble:["pack","Last resort. Draws other hunters"]};
-const GROUPS={soft:"Soft calls",loud:"Louder calls",care:"Use with care",pack:"Dindon pack",moose:"Moose calls",deer:"Deer calls",other:"Other sounds"};
+const GROUPS={soft:"Soft calls",loud:"Louder calls",care:"Use with care",pack:"Dindon pack",moose:"Moose calls",deer:"Deer calls",mine:"Your recordings",other:"Other sounds"};
 // Animals shown as tabs. Turkey and Moose always show; others only once the board lists a call for them.
 const ANIMALS={turkey:"Turkey",moose:"Moose",deer:"Deer"},ALWAYS=["turkey","moose"];
 let animal="turkey";try{animal=localStorage.animal||"turkey"}catch(_){}
@@ -399,7 +399,7 @@ function renderCalls(){
   }
   const mine=sounds.filter(s=>s.animal===animal);
   if(!mine.length){
-    box.innerHTML=animal==="turkey"?`<p class="empty">No sounds on the caller yet. Add some under Settings.</p>`
+    box.innerHTML=animal==="turkey"?`<p class="empty">No turkey calls on the caller yet.</p>`
       :`<p class="empty">No ${ANIMALS[animal].toLowerCase()} calls on the caller. They live on the SD card: put the call pack on the card (see Instructions) and restart the caller.</p>`;
     return;
   }
