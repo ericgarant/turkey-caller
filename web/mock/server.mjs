@@ -26,11 +26,14 @@ const sounds = [
 ].map(([id, name, group, ms]) => ({ id, name, animal: "turkey", group, ms, bytes: ms * BYTES_PER_MS }));
 
 // Call packs live on the SD card (F14). Off at start, like a board with no card; the test hook
-// POST /api/mock/pack name=moose on=1|0 inserts or pulls one. Lengths are the real moose clips.
+// POST /api/mock/pack name=moose on=1|0 inserts or pulls one. Deer lengths are the real clips.
 const PACKS = {
-  moose: [["moose_cow_heat", "Cow in heat", "Cow calling for a bull, long and loud", 23900], ["moose_cow_moan", "Cow moan", "Plaintive cow call, draws a bull in", 19900],
-    ["moose_bull_tending", "Tending grunt", "Bull grunting while he tends a cow", 6400], ["moose_rake", "Antler rake", "Raking brush and trees, challenges a bull", 13700],
-    ["moose_bull_grunt", "Bull grunt", "Bull rut grunting, long series", 17400], ["moose_bull_trail", "Trailing grunt", "Bull following a cow's trail", 3900]]
+  deer: [["deer_doe_estrus", "Doe in estrus", "Doe bleat in heat, draws a buck in", 23900], ["deer_doe_bleat", "Doe bleat", "Plaintive doe call, calm, all day", 19900],
+    ["deer_tending_grunt", "Tending grunt", "Buck grunting while he tends a doe", 6400], ["deer_rattle", "Antler rattle", "Rattling antlers, mimics two bucks sparring", 13700],
+    ["deer_buck_grunt", "Buck grunt", "Rut grunting, long series", 17400], ["deer_trail_grunt", "Trailing grunt", "Buck following a doe's trail", 3900]]
+    .map(([id, name, hint, ms]) => ({ id, name, animal: "deer", group: "deer", hint, ms, bytes: ms * BYTES_PER_MS })),
+  // Placeholder moose clips for the tab tests only; the real moose pack comes from Eric's moose folders.
+  moose: [["moose_cow_call", "Cow call", "Placeholder", 9000], ["moose_bull_grunt", "Bull grunt", "Placeholder", 12000]]
     .map(([id, name, hint, ms]) => ({ id, name, animal: "moose", group: "moose", hint, ms, bytes: ms * BYTES_PER_MS })),
 };
 

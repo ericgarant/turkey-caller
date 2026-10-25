@@ -1,6 +1,6 @@
-# F14 Call packs: moose now, deer later
+# F14 Call packs: deer, moose and more
 
-**Story:** As a hunter, I pick Turkey, Moose or Deer at the top of the page and see only that animal's calls. Moose calls are long (7 to 25 s), so they live on the SD card, not in flash.
+**Story:** As a hunter, I pick Turkey, Moose or Deer at the top of the page and see only that animal's calls. Deer and moose calls are long (4 to 25 s), so they live on the SD card, not in flash.
 
 **Depends on:** F12 (WROVER-E and SD card). Firmware lands as its own PR right after F12; the web, mock, script and this spec come first and work against the contract below.
 
@@ -17,29 +17,29 @@
 ## Page
 
 - Tabs **Turkey** and **Moose** are always shown; **Deer** appears once the board lists a deer call. The chosen tab is remembered on the phone (`localStorage`).
-- Each tab shows its groups (`Moose calls` for the moose pack). With no calls for the animal, the tab says they live on the SD card and points to the Instructions.
+- Each tab shows its groups (`Deer calls`, `Moose calls`). With no calls for the animal, the tab says they live on the SD card and points to the Instructions.
 - The turkey tab looks as before. Playing a call from another tab keeps working; the playing button lights up when its tab is open.
 
-## Moose pack (6 clips)
+## Deer pack (6 clips)
 
-The script (`make_moose_pack.sh`) is the source of truth for names and hints; the table below mirrors it. Made from Eric's six MP3s with `tools/audio/make_moose_pack.sh` (never committed, like the Dindon clips). Output goes to `tools/audio/data-sd/packs/moose/`; copy `packs/` onto the card.
+Eric's first six MP3s were deer calls (French names), first packed as moose by mistake. The script (`make_deer_pack.sh`) is the source of truth for names and hints; the table mirrors it. It makes the clips from Eric's six MP3s (never committed, like the Dindon clips). Output goes to `tools/audio/data-sd/packs/deer/`; copy `packs/` onto the card. The real moose pack (Eric's MooseCalls and MoosePreRutCalls folders) is built separately into `packs/moose/`, with ids starting `moose_`.
 
 | id | Name | Source | Length | Hint |
 |---|---|---|---|---|
-| moose_cow_heat | Cow in heat | 01 Femelle chaleur | 23.9 s | Cow calling for a bull, long and loud |
-| moose_cow_moan | Cow moan | 02 Plainte femelle | 19.9 s | Plaintive cow call, draws a bull in |
-| moose_bull_tending | Tending grunt | 03 Rot Mâle Tending | 6.4 s | Bull grunting while he tends a cow |
-| moose_rake | Antler rake | 04 Rackling | 13.7 s | Raking brush and trees, challenges a bull |
-| moose_bull_grunt | Bull grunt | 05 Rot Mâle | 17.4 s | Bull rut grunting, long series |
-| moose_bull_trail | Trailing grunt | 06 Rot Mâle trail | 3.9 s | Bull following a cow's trail |
+| deer_doe_estrus | Doe in estrus | 01 Femelle chaleur | 23.9 s | Doe bleat in heat, draws a buck in |
+| deer_doe_bleat | Doe bleat | 02 Plainte femelle | 19.9 s | Plaintive doe call, calm, all day |
+| deer_tending_grunt | Tending grunt | 03 Rot Mâle Tending | 6.4 s | Buck grunting while he tends a doe |
+| deer_rattle | Antler rattle | 04 Rackling | 13.7 s | Rattling antlers, mimics two bucks sparring |
+| deer_buck_grunt | Buck grunt | 05 Rot Mâle | 17.4 s | Rut grunting, long series |
+| deer_trail_grunt | Trailing grunt | 06 Rot Mâle trail | 3.9 s | Buck following a doe's trail |
 
-Total about 920 KB on the card. Deer adds a folder `/packs/deer/` and a script in the same shape.
+Total about 920 KB on the card.
 
 ## Acceptance criteria (QA row B20)
 
-1. With the pack on the card, `/api/sounds` lists the 6 moose calls with `animal: "moose"`, `ms` within 0.1 s of ffprobe, after the built-ins.
-2. The page shows the Turkey and Moose tabs; Moose lists the 6 calls; each plays to its end (up to 24 s) with no underruns.
+1. With the pack on the card, `/api/sounds` lists the deer calls with `animal: "deer"`, `ms` within 0.1 s of ffprobe, after the built-ins.
+2. The page shows Turkey and Moose tabs, plus Deer once a deer call is listed; Deer lists the 6 calls; each plays to its end (up to 24 s) with no underruns.
 3. With the card out, the board boots, the turkey calls play, and the Moose tab shows the SD card hint.
-4. An upload named `moose_rake` gets 409. A pack with a duplicate id lists the first and logs the second.
-5. Pulling the card while a moose call plays: it stops with a toast, no reset (F12 criterion 5).
+4. An upload named `deer_rattle` gets 409. A pack with a duplicate id lists the first and logs the second.
+5. Pulling the card while a deer or moose call plays: it stops with a toast, no reset (F12 criterion 5).
 6. The page stays under its 20 KB gzip budget.

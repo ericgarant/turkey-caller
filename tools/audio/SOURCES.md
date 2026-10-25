@@ -92,18 +92,18 @@ The API (v3) needs a free account key. Macaulay Library (Cornell) does not allow
 - WAV mono 16-bit 22.05 kHz ~ 44 KB/s: 11 clips ~ 2.9 MB, too big next to the firmware. Only use WAV for a few short clips.
 - MP3 needs a decoder on the ESP32 (e.g. libhelix in arduino-audio-tools / ESP32-A2DP).
 
-## Moose pack (Eric's own MP3s, 6 calls, on the SD card)
-Six tracks Eric supplied (French names), stereo 44.1 kHz 192 kbps MP3, 7.5 to 31 s. Origin and licence are not in the
-files: personal use, never committed. Put them in `tools/audio/local/moose/` (names start with `01_` to `06_`) and run
-`tools/audio/make_moose_pack.sh`. Same cleanup as the others (silence trim, -14 LUFS, mono, IMA ADPCM 22.05 kHz) but
-no 10 s cap: the clips are kept whole. Output: `tools/audio/data-sd/packs/moose/` (git-ignored), copied to the SD card
-as `/packs/moose/`. See `docs/features/F14-call-packs.md`.
+## Deer pack (Eric's own MP3s, 6 calls, on the SD card)
+Six tracks Eric supplied (French names: femelle = doe, rot mâle = buck grunt), stereo 44.1 kHz 192 kbps MP3, 7.5 to 31 s. They were first packed as moose by mistake. Origin and licence are not in the
+files: personal use, never committed. Put them in `tools/audio/local/deer/` (names start with `01_` to `06_`) and run
+`tools/audio/make_deer_pack.sh`. Same cleanup as the others (silence trim, -14 LUFS, mono, IMA ADPCM 22.05 kHz) but
+no 10 s cap: the clips are kept whole. Output: `tools/audio/data-sd/packs/deer/` (git-ignored), copied to the SD card
+as `/packs/deer/`. See `docs/features/F14-call-packs.md`. "Rackling" is read as antler rattling; confirm by ear.
 
 | File | Shown as | Source track | Clip |
 |---|---|---|---|
-| moose_cow_heat.wav | Cow in heat | 01 Femelle chaleur | 23.9 s, 259 KB |
-| moose_cow_moan.wav | Cow moan | 02 Plainte femelle | 19.9 s, 215 KB |
-| moose_bull_tending.wav | Tending grunt | 03 Rot Mâle Tending | 6.4 s, 69 KB |
-| moose_rake.wav | Antler rake | 04 Rackling | 13.7 s, 148 KB |
-| moose_bull_grunt.wav | Bull grunt | 05 Rot Mâle | 17.4 s, 188 KB |
-| moose_bull_trail.wav | Trailing grunt | 06 Rot Mâle trail | 3.9 s, 42 KB |
+| deer_doe_estrus.wav | Doe in estrus | 01 Femelle chaleur | 23.9 s, 259 KB |
+| deer_doe_bleat.wav | Doe bleat | 02 Plainte femelle | 19.9 s, 215 KB |
+| deer_tending_grunt.wav | Tending grunt | 03 Rot Mâle Tending | 6.4 s, 69 KB |
+| deer_rattle.wav | Antler rattle | 04 Rackling | 13.7 s, 148 KB |
+| deer_buck_grunt.wav | Buck grunt | 05 Rot Mâle | 17.4 s, 188 KB |
+| deer_trail_grunt.wav | Trailing grunt | 06 Rot Mâle trail | 3.9 s, 42 KB |
