@@ -13,6 +13,11 @@ if (!base) {
   await new Promise((r) => server.stdout.once("data", r));
   base = "http://localhost:8095";
 }
+// This test forgets and re-pairs the speaker with a fake address, so it must not run against the real board.
+if (!/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(base) && !process.env.DESTRUCTIVE) {
+  console.error("features.mjs is for the mock only: it forgets the speaker. Set DESTRUCTIVE=1 to run it against " + base);
+  process.exit(1);
+}
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const get = async (p) => (await fetch(base + p)).json();
 const post = async (p, form = {}) => {
