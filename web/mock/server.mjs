@@ -23,7 +23,16 @@ const sounds = [
   ["dindon_purr", "Purr & clucks", "pack", 7500], ["dindon_yelp", "Yelp", "pack", 3200],
   ["dindon_fast_yelp", "Fast yelp", "pack", 3100], ["dindon_kee_kee", "Kee-kee run", "pack", 3800],
   ["dindon_gobble", "Gobble", "pack", 2900],
-].map(([id, name, group, ms]) => ({ id, name, group, ms, bytes: ms * BYTES_PER_MS }));
+].map(([id, name, group, ms]) => ({ id, name, animal: "turkey", group, ms, bytes: ms * BYTES_PER_MS }));
+
+// Call packs live on the SD card (F14). Off at start, like a board with no card; the test hook
+// POST /api/mock/pack name=moose on=1|0 inserts or pulls one. Lengths are the real moose clips.
+const PACKS = {
+  moose: [["moose_cow_heat", "Cow in heat", "Cow calling for a bull, long and loud", 23900], ["moose_cow_moan", "Cow moan", "Plaintive cow call, draws a bull in", 19900],
+    ["moose_bull_tending", "Tending grunt", "Bull grunting while he tends a cow", 6400], ["moose_rake", "Antler rake", "Raking brush and trees, challenges a bull", 13700],
+    ["moose_bull_grunt", "Bull grunt", "Bull rut grunting, long series", 17400], ["moose_bull_trail", "Trailing grunt", "Bull following a cow's trail", 3900]]
+    .map(([id, name, hint, ms]) => ({ id, name, animal: "moose", group: "moose", hint, ms, bytes: ms * BYTES_PER_MS })),
+};
 
 const NEARBY = [
   { name: "Level Box Slim", addr: "5C:49:7D:1A:20:8E", rssi: -52 },
@@ -157,6 +166,12 @@ const server = http.createServer(async (req, res) => {
   const route = req.method + " " + url.pathname;
   if (process.env.MOCK_LOG) console.log(route, JSON.stringify(p));
 
+  if (route === "POST /api/mock/pack") {
+    const pack = PACKS[p.name]; if (!pack) return fail(res, 404, "no such pack");
+    for (const c of pack) { const i = sounds.findIndex((x) => x.id === c.id); if (i >= 0) sounds.splice(i, 1); }
+    if (p.on === "1") sounds.push(...pack.map((c) => ({ ...c })));
+    return ok(res);
+  }
   if (route === "POST /api/mock/busy") { busy = +p.count || 0; busyUntil = Date.now() + (+p.ms || 0); return ok(res); }
   if (url.pathname.startsWith("/api/") && (busy > 0 || Date.now() < busyUntil)) { if (busy > 0) busy--; return fail(res, 503, "busy, try again"); }
 
@@ -221,7 +236,7 @@ const server = http.createServer(async (req, res) => {
       const ms = Math.round(raw.length / BYTES_PER_MS);
       const old = sounds.find((x) => x.id === m[1]);
       if (old) Object.assign(old, { bytes: raw.length, ms });
-      else sounds.push({ id: m[1], name: m[1], group: "other", ms, bytes: raw.length });
+      else sounds.push({ id: m[1], name: m[1], animal: "turkey", group: "other", ms, bytes: raw.length });
       return ok(res);
     }
     case "POST /api/sounds/delete": {

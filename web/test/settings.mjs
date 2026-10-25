@@ -8,7 +8,7 @@ const PORT = 8096, URL = `http://localhost:${PORT}/`;
 const server = spawn(process.execPath, ["mock/server.mjs", String(PORT)], { stdio: ["ignore", "pipe", "inherit"] });
 await new Promise((r) => server.stdout.once("data", r));
 
-const browser = await chromium.launch();
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const errors = [];
 let failed = false;
 const phone = async () => {
