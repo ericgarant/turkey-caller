@@ -6,6 +6,8 @@
 #   local/moose-calls/   from "MooseCalls"        (01-MOOSE COW 1.mp3 ... 10-DEER ROT 2.mp3)
 #   local/moose-prerut/  from "MoosePreRutCalls"  (1- Renâclement ... 6- Buck agressif)
 #   local/deer-calls/    from "DeerCalls"         (01_Femelle chaleur ... 06_Rot Mâle (trail))
+#   local/               from "TurkeyCalls"       (01_Dindon_Purr ... 05_Dondon_KeeKee, the same MP3s
+#                        the built-in Dindon pack is cut from; here they stay full length)
 # Output: ./data-sd/packs/<pack>/  (copy the whole packs/ folder onto the SD card as /packs, FAT)
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -14,6 +16,11 @@ FILTER="silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremo
 # pack|id|source (folder/file prefix)|display name (32 bytes max)|hint (47 bytes max)
 # A pack's calls are listed in this order. Ids are unique across all packs and the built-ins.
 CALLS="
+turkey|dindon_purr_full|./01_|Purr & clucks (full)|Whole track, soft and steady
+turkey|dindon_yelp_full|./03_|Yelp (full)|Whole yelp track
+turkey|dindon_fast_yelp_full|./04_|Fast yelp (full)|Whole fast yelp track
+turkey|dindon_kee_kee_full|./05_|Kee-kee run (full)|Whole kee-kee run track
+turkey|dindon_gobble_full|./02_|Gobble (full)|Whole gobble track, use with care
 moose|moose_cow_1|moose-calls/01-|Cow call 1|Short cow call
 moose|moose_cow_2|moose-calls/02-|Cow call 2|Cow call, medium length
 moose|moose_cow_3|moose-calls/03-|Cow call 3|Cow call, medium length
@@ -57,7 +64,9 @@ for line in open(sys.argv[1], encoding="utf-8"):
     if not line.strip(): continue
     pack, i, n, h = line.rstrip("\n").split("|", 3)
     assert len(n.encode()) <= 32 and len(h.encode()) <= 47, i
-    packs.setdefault(pack, []).append({"id": i, "name": n, "animal": pack, "group": pack, "hint": h})
+    # Turkey pack clips join the Dindon pack group on the Turkey tab; moose and deer get their own group.
+    group = "pack" if pack == "turkey" else pack
+    packs.setdefault(pack, []).append({"id": i, "name": n, "animal": pack, "group": group, "hint": h})
 for pack, rows in packs.items():
     text = json.dumps(rows, indent=2, ensure_ascii=False) + "\n"
     assert len(text.encode()) < 4096, pack + " index over 4 KB"
