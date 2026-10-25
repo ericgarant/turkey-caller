@@ -451,9 +451,11 @@ function cfgCheck(){  // returns an error-free POST body, or null
   const p={ap_ssid:cfgVal("ap_ssid"),device_name:cfgVal("device_name")},pass=$("apPass").value;let ok=true;
   const bad=(id,m)=>{cfgErr(id,m);ok=false};
   cfgErr("fSsid");cfgErr("fPass");cfgErr("fName");
-  if(!p.ap_ssid||p.ap_ssid.length>32)bad("fSsid","1 to 32 characters");
-  if(!p.device_name||p.device_name.length>24)bad("fName","1 to 24 characters");
-  if(pass&&(pass.length<8||pass.length>63))bad("fPass","8 to 63 characters");
+  // Limits are in bytes, as the board counts them: an accented letter takes 2
+  const B=v=>new TextEncoder().encode(v).length,two=" (accented letters count as 2)";
+  if(!p.ap_ssid)bad("fSsid","1 to 32 characters");else if(B(p.ap_ssid)>32)bad("fSsid","Too long: 32 characters at most"+two);
+  if(!p.device_name)bad("fName","1 to 24 characters");else if(B(p.device_name)>24)bad("fName","Too long: 24 characters at most"+two);
+  if(pass&&(B(pass)<8||B(pass)>63))bad("fPass","8 to 63 characters"+(B(pass)>pass.length?two:""));
   if(pass)p.ap_pass=pass;
   return ok?p:null;
 }
@@ -499,7 +501,9 @@ $("cfgForm").onsubmit=async e=>{
     const r=await api("/api/config",p);
     $("apPass").value="";
     if(r&&r.restart){savedAt=restarting=Date.now();lastOk=Date.now();showOffline("Restarting…",`Saved. Rejoin ${p.ap_ssid} when your phone drops off. This page reconnects by itself.`)}
-    else{toast("Saved");cfg=Object.assign({},cfg,{device_name:p.device_name,ap_ssid:p.ap_ssid});await loadConfig()}
+    // No GET here: the board pushes the new cfg rev and that reloads every phone, this one
+    // included. A second GET from the saving phone dipped the heap under 40 KB (issue #8).
+    else{toast("Saved");cfg=Object.assign({},cfg,{device_name:p.device_name,ap_ssid:p.ap_ssid});cfgPaint()}
   }catch(err){
     if(/changed on another phone|409/i.test(err.message)){toast("The other phone just changed these. Check them and save again.");await loadConfig()}
     else toast(why(err));
