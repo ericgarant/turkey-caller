@@ -171,6 +171,7 @@ nav button[aria-current="page"]{color:var(--accent)}
         <h2>Sounds <small class="mono" id="fsText"></small></h2>
         <div class="card">
           <div class="meter" aria-hidden="true"><i id="fsBar"></i></div>
+          <p class="sub" id="noSd" hidden>No SD card: recordings unavailable</p>
           <ul class="list" id="sndList"></ul>
           <div class="field" id="upField" style="margin-top:10px" hidden>
             <label for="upFile">Add a sound</label>
@@ -310,7 +311,7 @@ const BT_TEXT={connected:"Connected",connecting:"Connecting…",searching:"Looki
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>"&#"+c.charCodeAt(0)+";");
 const fmtS=ms=>ms?(ms/1000).toFixed(1)+" s":"";
-const fmtKB=b=>Math.round(b/1024)+" KB";
+const fmtKB=b=>b>=2**30?(b/2**30).toFixed(1)+" GB":b>=10*2**20?Math.round(b/2**20)+" MB":Math.round(b/1024)+" KB";  // the SD card is in MB or GB
 let st={bt:"",speaker:"",playing:false,current:"",volume:null,loop:false},sounds=[],devices=[];
 let offlineSticky=0,stAt=0,lastOk=Date.now(),ws=null,wsOk=false,restarting=0,scanUntil=0,volSentAt=0,volTimer=null;
 
@@ -521,7 +522,8 @@ $("upFile").onchange=e=>{
 };
 function upload(f,id,freed){
   if(st.playing){toast("Stop the call first, then add the sound");return}
-  if(st.fsFree!=null&&f.size>st.fsFree+(freed||0)-8192){toast(`Not enough room: ${fmtKB(f.size)} needed, ${fmtKB(st.fsFree)} free`);return}
+  const room=st.sdTotal!=null?st.sdFree:st.fsFree;
+  if(room!=null&&f.size>room+(freed||0)-8192){toast(`Not enough room: ${fmtKB(f.size)} needed, ${fmtKB(room)} free`);return}
   const fd=new FormData();fd.append("file",f,id+".wav");
   const x=new XMLHttpRequest(),note=$("upNote");
   x.open("POST","/api/sounds");
@@ -632,7 +634,12 @@ function paint(){
   if(st.volume!=null&&document.activeElement!==$("vol")&&Date.now()-volSentAt>1000){$("vol").value=st.volume;$("volTxt").textContent=st.volume}
   $("volDn").disabled=$("volUp").disabled=$("vol").disabled=st.volume==null;
   document.querySelectorAll("[data-del]").forEach(b=>b.disabled=!!st.playing);
-  if(st.fsTotal){const used=st.fsTotal-st.fsFree;$("fsText").textContent=`${fmtKB(used)} used of ${fmtKB(st.fsTotal)}`;$("fsBar").style.width=(used/st.fsTotal*100)+"%"}
+  // The meter shows the SD card (where recordings go) when the board reports one; older boards report flash only.
+  const hasSd=st.sdTotal!=null,tot=hasSd?st.sdTotal:st.fsTotal,free=hasSd?st.sdFree:st.fsFree;
+  $("noSd").hidden=!(hasSd&&!st.sdTotal);
+  $("upField").hidden=!EDIT_SOUNDS||(hasSd&&!st.sdTotal);
+  if(tot){const used=tot-free;$("fsText").textContent=`${fmtKB(used)} used of ${fmtKB(tot)}`;$("fsBar").style.width=(used/tot*100)+"%"}
+  else{$("fsText").textContent="";$("fsBar").style.width="0"}
   const up=st.uptime||0,rows=[["Free memory",st.heap!=null&&fmtKB(st.heap)],["Lowest free memory",st.minHeap!=null&&fmtKB(st.minHeap)],
     ["Phones on Wi-Fi",st.clients!=null&&st.clients+" of 2"],["Up for",st.uptime!=null&&Math.floor(up/3600)+" h "+Math.floor(up%3600/60)+" min"],
     ["Dropouts",st.underruns!=null&&st.underruns],["Firmware",st.version]];

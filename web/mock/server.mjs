@@ -54,6 +54,15 @@ let playStart = 0, playTimer = null, scanning = false, devices = [];
 let busy = 0, busyUntil = 0;  // test hook (mock only): POST /api/mock/busy count=N (next N API calls) or ms=T (every API call for T ms) answers 503, like the board's busy window
 const boot = Date.now();
 
+// SD card (F12): present when a pack is inserted or the card is set on; POST /api/mock/sd on=0|1 (empty = flash only again).
+// Off by default so the older tests see a board with flash only (no sd fields); on=1 gives a 1 GB card, on=0 no card.
+let sdOn = null;
+const SD_TOTAL = 960 * 1024 * 1024;
+function sdStatus() {
+  if (sdOn === null) return {};
+  return sdOn ? { sdTotal: SD_TOTAL, sdFree: SD_TOTAL - 5 * 1024 * 1024 } : { sdTotal: 0, sdFree: 0 };
+}
+
 function status() {
   const s = sounds.find((x) => x.id === st.current);
   const len = s ? s.ms : 0;
@@ -63,7 +72,7 @@ function status() {
   return {
     ...st, cfg: rev, pos_ms: pos, len_ms: len, plays: 0, underruns: 0,
     heap: 70000 + Math.round(Math.random() * 3000), minHeap: 52880, maxBlock: 40000,
-    fsFree: FS_TOTAL - used, fsTotal: FS_TOTAL, clients: sockets.size || 1,
+    fsFree: FS_TOTAL - used, fsTotal: FS_TOTAL, ...sdStatus(), clients: sockets.size || 1,
     uptime: Math.floor((Date.now() - boot) / 1000) + 4380, version: "mock",
   };
 }
@@ -166,6 +175,7 @@ const server = http.createServer(async (req, res) => {
   const route = req.method + " " + url.pathname;
   if (process.env.MOCK_LOG) console.log(route, JSON.stringify(p));
 
+  if (route === "POST /api/mock/sd") { sdOn = p.on === "" ? null : p.on === "1"; if (sdOn === false) st.error = "SD card removed"; push(); return ok(res); }
   if (route === "POST /api/mock/pack") {
     const pack = PACKS[p.name]; if (!pack) return fail(res, 404, "no such pack");
     for (const c of pack) { const i = sounds.findIndex((x) => x.id === c.id); if (i >= 0) sounds.splice(i, 1); }
