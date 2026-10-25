@@ -1,0 +1,40 @@
+# F12 Move to the WROVER-E board with an SD card
+
+**Why:** Eric decided on 25 Oct 2026 that the Freenove ESP32-WROVER-E becomes the main caller. It has 8 MB of PSRAM and a microSD slot with a 1 GB card. The card gives room for hours of recordings (about 11 KB per second, so roughly 25 hours on 1 GB), which unblocks phone upload (F03) without touching the built-in calls. The PSRAM takes pressure off the internal heap (F10, issue #8). The old WROOM-32E board stays a spare with the firmware it has today.
+
+## Storage layout
+
+- **Built-in calls stay in flash (LittleFS)**, exactly as today: same partitions, same `index.json`, same fetch script and `uploadfs` step. The board plays them with no card inserted.
+- **Phone uploads go to the SD card**, in `/sounds/` on a FAT-formatted card (FAT16 or FAT32; Eric's 1 GB card is fine as it comes).
+- The sound list is the built-ins (in index order and groups, as today) followed by the card's sounds under "Your recordings". The ids share one namespace. An upload may not use a built-in id; that request gets 409 with "name already used by a built-in call".
+- `/api/status` reports the card separately from flash: `sdFree` and `sdTotal`, both 0 when there is no card. `fsFree` and `fsTotal` stay for flash. The Settings storage meter shows the card, since that's where uploads go.
+- **No card, or an unreadable card:** the board boots and plays the built-ins. The page shows "No SD card: recordings unavailable" in Settings and hides the add-a-sound field. Inserting a card needs a restart (no hot-plug).
+- Pulling the card out while a recording plays stops that call with an error toast. No crash, and the built-ins keep working.
+
+## SD wiring (first step: confirm on the board)
+
+The pins depend on the Freenove board revision. Before anything else, the firmware thread flashes a small probe that tries SD_MMC 1-bit mode (CLK 14, CMD 15, D0 2) first, then SPI mode, and prints which one mounted, plus the card size and the free space. It then records the working mode and pins in `firmware/README.md`. Use 1-bit SD_MMC if it works: it avoids GPIO 4 and 12, and GPIO 12 is a boot strapping pin. The probe also prints the flash size with `esptool.py flash_id`, which the partition table must match.
+
+GPIO 16 and 17 are taken by the PSRAM on WROVER modules, so nothing else may use them.
+
+## PSRAM
+
+- Turn it on (`BOARD_HAS_PSRAM`, `-mfix-esp32-psram-cache-issue`, `CONFIG_SPIRAM=y`, `CONFIG_SPIRAM_USE_MALLOC=y`).
+- Let Wi-Fi and lwIP allocate from PSRAM (`CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y`). The Bluetooth controller and the audio task's buffers must stay in internal RAM, because they're used from interrupts or real-time paths.
+- Leave the trimmed sdkconfig choices in place. Raise a Wi-Fi buffer count back up only if a measurement shows it helps.
+- **F10 on this board:** the 40 KB floor applies to *internal* heap (`heap_caps_get_free_size(MALLOC_CAP_INTERNAL)`). `/api/status` adds `psramFree`. `minHeap` and the `low=` serial value stay internal-only, so the numbers on #8 stay comparable.
+
+## Build
+
+- A new PlatformIO env `wrover` (board `esp-wrover-kit` or `esp32dev` with the PSRAM flags) becomes the default env. The README flash steps use it.
+- The old env stays as `wroom`, built in CI only, so the spare board can be reflashed. Before F12 merges, main is tagged `wroom-final` as a known-good build for the spare.
+- `check_size.py` keeps its 2.25 MB budget, unless the probe shows the WROVER-E has more than 4 MB of flash.
+
+## Acceptance criteria (new QA row B18)
+
+1. The probe's mode, pins, card size and flash size are in the PR and in `firmware/README.md`.
+2. With the card in, all 16 built-ins play and `sdFree`/`sdTotal` are right. With the card out, the board boots, the built-ins play, and the page shows the no-card message.
+3. A WAV copied to `/sounds/` on the card from the Mac shows up under "Your recordings" after a restart and plays without underruns, including on Repeat for 2 minutes.
+4. F10 on the internal heap: B9 (50 rapid taps) and the two-phone tests from #8 stay at 40 KB or more, outside the transient events. Report `low=` and `psramFree` next to the old board's numbers on #8.
+5. Pulling the card while a recording plays: that call stops with a toast, with no reset and no `[E]` loop. Built-ins still play afterwards.
+6. Everything that passed on the old board still passes (B1 to B17 fast pass) on the new one.

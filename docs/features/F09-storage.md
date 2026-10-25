@@ -1,6 +1,6 @@
 # F09 More room for sounds
 
-> **Status: deferred** (24 Oct 2026). Eric skipped uploading his own recordings for now. Not in the active build order; see [README](README.md#deferred).
+> **Status: superseded by [F12](F12-wrover-sd.md)** (25 Oct 2026). Uploads go to the SD card on the WROVER-E, so this flash-layout work isn't needed. Kept for the record. Measured on the old board: 16 built-ins leave 32 KB of 1,408 KB free.
 
 **Problem:** The 1.375 MB LittleFS partition was reported about 91% full with the 12 calls, which would leave almost nothing for phone uploads (F03). `docs/architecture.md` estimates the clips at about 0.83 MB (60 to 65%), so the two figures disagree; the first task is to read the real numbers (`fsFree`, `fsTotal`, and `LittleFS: used of total` on the serial log) and put them in the PR. LittleFS overhead and the longer clips may explain the gap. The app uses about 1.75 MB of its 2.5 MB partition and the build budget is 2.25 MB.
 
