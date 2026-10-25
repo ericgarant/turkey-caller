@@ -155,7 +155,7 @@ nav button[aria-current="page"]{color:var(--accent)}
       <div>
         <h2>Find a speaker <small id="scanNote"></small></h2>
         <div class="card">
-          <p class="sub" style="margin:0 0 12px">Put the speaker in pairing mode first. Searching takes about 10 seconds and stops any call that is playing.</p>
+          <p class="sub" style="margin:0 0 12px">Put the speaker in pairing mode first. Searching takes up to about 25 seconds and stops any call that is playing.</p>
           <button class="btn primary wide" id="scanBtn" type="button">Search for speakers</button>
           <ul class="list" id="devList"></ul>
         </div>
@@ -209,9 +209,9 @@ nav button[aria-current="page"]{color:var(--accent)}
         <div class="card help">
           <ol>
             <li>Turn the speaker on and put it in pairing mode.</li>
-            <li>Open <b>Speaker</b> and tap <b>Search for speakers</b>. It takes about 10 seconds and stops any call playing.</li>
+            <li>Open <b>Speaker</b> and tap <b>Search for speakers</b>. It takes up to about 25 seconds and stops any call playing.</li>
             <li>Tap <b>Use</b> next to your speaker. The caller remembers it, even after a restart.</li>
-            <li>To switch speakers, tap <b>Forget speaker</b> (twice), then search again.</li>
+            <li>To switch speakers, search again and tap <b>Use</b> on the new one. No need to forget the old one first. <b>Forget speaker</b> (tap twice) only clears the saved speaker.</li>
           </ol>
         </div>
       </div>
@@ -232,7 +232,7 @@ nav button[aria-current="page"]{color:var(--accent)}
         <h2>Settings</h2>
         <div class="card help">
           <ul>
-            <li><b>Wi-Fi name</b> and <b>password</b> (8 to 63 characters): changing either restarts the caller. Rejoin the new Wi-Fi afterwards.</li>
+            <li><b>Wi-Fi name</b> and <b>password</b> (8 to 63 plain letters, digits and symbols, no accents): changing either restarts the caller. Rejoin the new Wi-Fi afterwards.</li>
             <li><b>Device name</b> shows at the top of this page. No Wi-Fi restart.</li>
             <li>Every change shows on both phones at once. If the other phone saved first, yours asks you to review before saving.</li>
             <li>Change the factory password before you rely on the caller.</li>
@@ -250,7 +250,8 @@ nav button[aria-current="page"]{color:var(--accent)}
         <h2>Troubleshooting</h2>
         <div class="card help">
           <dl class="tb">
-            <dt>"Speaker did not answer"</dt><dd>Turn the speaker on, bring it close, and tap the call again. Still nothing: Speaker, then Forget, then search and Use again.</dd>
+            <dt>"Speaker did not answer"</dt><dd>Turn the speaker on, bring it close, and tap the call again. Still nothing: Speaker, search, and Use it again.</dd>
+            <dt>"Searching for speakers"</dt><dd>A search is running (up to about 25 seconds). Calls wait until it ends.</dd>
             <dt>"No speaker connected"</dt><dd>Pair one under Speaker.</dd>
             <dt>No sound, speaker connected</dt><dd>Raise the volume on this page and on the speaker itself.</dd>
             <dt>"Lost the caller"</dt><dd>Check your phone is still on the caller's Wi-Fi. The page reconnects by itself.</dd>
