@@ -1,5 +1,7 @@
 # F13 Motion sensor and LED
 
+**Status: dropped (25 Oct 2026).** Eric removed the PIR and the LED from the board to keep the caller simple and reliable. Nothing from this spec is built; draft PR #31 was closed without merging. Kept for history only.
+
 **Story:** I leave the caller near a decoy. When something moves in front of it, the LED on the board lights, so I can see it from my blind without looking at my phone. Later, I may want motion to play a call I choose.
 
 **Hardware (WROVER-E board, added by Eric on 25 Oct 2026):**

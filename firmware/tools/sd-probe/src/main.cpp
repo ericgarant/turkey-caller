@@ -87,25 +87,16 @@ void setup() {
   result += "flash MB: " + String(flash / 1048576) + "\n";
   result += "psram total KB: " + String(ESP.getPsramSize() / 1024) + ", free KB: " + String(ESP.getFreePsram() / 1024) + "\n";
   result += "internal heap free KB: " + String(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024) + "\n";
-  // GPIO 33 (LED) is never touched; GPIO 13 is only read.
-  // Eric's PIR output is soldered to GPIO 13, the slot's DAT3. A card that sees DAT3 low at its
-  // first command may switch to SPI mode, so log GPIO 13 (read only, never driven) around each try.
-  pinMode(13, INPUT);
-  result += "GPIO 13 (PIR) at boot: " + String(digitalRead(13) ? "high" : "low") + "\n";
   rawCard();
   if (tryMmc()) return;
   trySpi(18, 19, 23, 5);
 }
 
 void loop() {
-  static uint32_t highs = 0, last = 0;
-  static int prev = 0;
-  int now = digitalRead(13);
-  if (now && !prev) highs++;
-  prev = now;
+  static uint32_t last = 0;
   if (millis() - last > 10000) {
     last = millis();
-    Serial.print("\n=== PROBE ===\n" + result + "PIR on GPIO 13 now " + (now ? "high" : "low") + ", went high " + String(highs) + " times since boot\n=== END ===\n");
+    Serial.print("\n=== PROBE ===\n" + result + "=== END ===\n");
   }
   delay(10);
 }
