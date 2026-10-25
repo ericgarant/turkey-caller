@@ -10,5 +10,10 @@
   {"id": "fly_down_cackle", "name": "Fly-down cackle", "group": "loud"},
   {"id": "kee_kee_run", "name": "Kee-kee run", "group": "loud"},
   {"id": "gobble", "name": "Gobble", "group": "care"},
-  {"id": "putt", "name": "Putt", "group": "care"}
+  {"id": "putt", "name": "Putt", "group": "care"},
+  {"id": "dindon_purr", "name": "Purr & clucks", "group": "pack"},
+  {"id": "dindon_yelp", "name": "Yelp", "group": "pack"},
+  {"id": "dindon_fast_yelp", "name": "Fast yelp", "group": "pack"},
+  {"id": "dindon_kee_kee", "name": "Kee-kee run", "group": "pack"},
+  {"id": "dindon_gobble", "name": "Gobble", "group": "pack"}
 ]

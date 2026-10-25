@@ -40,12 +40,12 @@ try {
       "fsFree", "fsTotal", "clients", "uptime", "underruns", "version"]) assert.ok(k in s, `missing ${k}`);
     assert.ok(["idle", "searching", "connecting", "connected"].includes(s.bt));
   });
-  await step("12 sounds, each with id, name, group, bytes, ms", async () => {
+  await step("17 sounds (12 + the Dindon pack), each with id, name, group, bytes, ms", async () => {
     const list = await get("/api/sounds");
-    assert.equal(list.length, 12);
+    assert.equal(list.length, 17);
     for (const s of list) {
       assert.match(s.id, /^[a-z0-9_]{1,24}$/);
-      assert.ok(["soft", "loud", "care"].includes(s.group));
+      assert.ok(["soft", "loud", "care", "pack"].includes(s.group));
       assert.ok(s.bytes > 0 && s.ms > 0);
     }
   });
@@ -97,10 +97,10 @@ try {
     assert.equal((await upload("Bad Name.wav", 4000)).code, 400);
     assert.equal((await upload("big.wav", 2 * 1024 * 1024)).code, 413);
     assert.equal((await upload("owl_hoot.wav", 4000)).code, 200);
-    assert.equal((await get("/api/sounds")).length, 13);
+    assert.equal((await get("/api/sounds")).length, 18);
     assert.equal((await post("/api/sounds/delete", { id: "owl_hoot" })).code, 200);
     assert.equal((await post("/api/sounds/delete", { id: "owl_hoot" })).code, 404);
-    assert.equal((await get("/api/sounds")).length, 12);
+    assert.equal((await get("/api/sounds")).length, 17);
   }, { risky: true });
   await step("config validation: short password and long name refused, password never returned", async () => {
     assert.equal((await post("/api/config", { ap_ssid: "Turk", ap_pass: "short" })).code, 400);

@@ -18,10 +18,10 @@ try {
 
   const step = async (name, fn) => { await fn(); console.log("ok -", name); };
 
-  await step("shows the 12 calls in three groups", async () => {
+  await step("shows the 17 calls in four groups", async () => {
     await page.waitForSelector(".call");
-    assert.equal(await page.locator(".call").count(), 12);
-    assert.deepEqual(await page.locator("#groups h2").allTextContents(), ["Soft calls", "Louder calls", "Use with care"]);
+    assert.equal(await page.locator(".call").count(), 17);
+    assert.deepEqual(await page.locator("#groups h2").allTextContents(), ["Soft calls", "Louder calls", "Use with care", "Dindon pack"]);
   });
   await step("speaker pill shows the connected speaker", async () => {
     await page.waitForFunction(() => document.getElementById("spkText").textContent === "Level Box Slim");
@@ -63,7 +63,7 @@ try {
   });
   await step("settings show sounds, storage and Wi-Fi name", async () => {
     await page.click('nav [data-go="settings"]');
-    assert.equal(await page.locator("#sndList li").count(), 12);
+    assert.equal(await page.locator("#sndList li").count(), 17);
     assert.match(await page.textContent("#fsText"), /used of 1408 KB/);
     assert.equal(await page.inputValue("#apSsid"), "TurkeyCaller");
   });

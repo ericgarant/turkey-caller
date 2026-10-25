@@ -38,8 +38,42 @@ Select with `WHINE_XC` and `WHINE_START`. XC508128 is the default because it's a
 
 The clip stays git-ignored, like the rest of `data/`.
 
+## Dindon pack (Eric's own MP3s, 5 calls)
+Five tracks Eric supplied, album tag "DINDON" (French for turkey), 2014, stereo 44.1 kHz ~200 kbps MP3 with cover art.
+The origin and licence are not in the files, so treat them like the NWTF set: personal use, never committed.
+Put them in `tools/audio/local/` (git-ignored) and run the fetch script; it finds them by name.
+
+Each track repeats one call several times with digital silence between takes. One take is cut (start and length
+in the script's `LOCAL` list, found from the silence gaps), then the usual cleanup: silence trim, -14 LUFS, mono,
+IMA ADPCM 22.05 kHz.
+
+| ESP32 file | Shown as | Source track | Cut | Clip | What it is (by analysis, confirm by ear) |
+|---|---|---|---|---|---|
+| dindon_purr.wav | Purr & clucks | 01_Dindon_Purr.mp3 (44 s) | 2.9 s + 7.7 s | 7.5 s, 83 KB | Soft rolling purrs with a few single clucks |
+| dindon_yelp.wav | Yelp | 03_Dindon_Yelp1.mp3 (19 s) | 6.2 s + 3.3 s | 3.2 s, 35 KB | Plain hen yelp, about 8 notes, steady pace |
+| dindon_fast_yelp.wav | Fast yelp | 04_Dindon_Yelp2.mp3 (24 s) | 2.5 s + 3.2 s | 3.1 s, 34 KB | Louder, faster, nearly continuous yelping (excited yelp) |
+| dindon_kee_kee.wav | Kee-kee run | 05_Dondon_KeeKee.mp3 (15 s) | 2.55 s + 3.9 s | 3.8 s, 42 KB | High whistles (~1.6 kHz) ending in yelps |
+| dindon_gobble.wav | Gobble | 02_Dindon_Glou.mp3 (56 s, "GlouGlou") | 5.0 s + 3.2 s | 2.9 s, 33 KB | One long gobble |
+
+Total 221 KB (~20 s of audio). The full tracks would be ~1.7 MB as ADPCM, more than the whole 1.375 MB LittleFS.
+
+### When to use them
+| Call | Meaning | When hunters use it |
+|---|---|---|
+| Purr & clucks | Contented, feeding bird; a spacing call ("this is my space") [1][2] | Bird close and wary, inside ~100 yd: keep calling to soft purrs and clucks to reassure it the last steps [2][3]. Works spring and fall; good on pressured birds [4] |
+| Yelp | The basic hen call; locator and assembly call, and a hen ready to breed in spring [1][2] | Spring: talk to a gobbler. Fall: gather a flock. Start soft, get louder only until birds answer [3] |
+| Fast yelp | Excited yelp: faster, louder than a plain yelp. Excited, not alarmed [2] | A henned-up gobbler (draw the boss hen and he follows), or one that hung up after soft calling [2]. Match the birds' energy [3] |
+| Kee-kee run | Lost call of young-of-the-year birds: whistles then yelps [2][4] | Fall, to reassemble a scattered flock: wait ~20 min, start soft and get louder [4]. Also adds realism in spring, on public land [2] |
+| Gobble | The tom's mating call, spring [1][2] | Last resort for a tom that won't close the distance, or late evening to get a roosted tom to gobble [2][3]. Can draw other hunters: avoid on public land [2][3][5] |
+
+[1] MeatEater, "The 6 Turkey Vocalizations You Need to Know", https://www.themeateater.com/hunt/wild-turkey/the-six-turkey-vocalizations-you-need-to-know
+[2] NWTF, "The Sounds of the Wild Turkey", https://live.nwtf.org/content-hub/the-sounds-of-the-wild-turkey
+[3] Outdoor Life, "Turkey calling tips", https://www.outdoorlife.com/hunting/turkey-calling-tips/
+[4] Tennessee Wildlife Resources Agency, "Fall Calls that Work" (2019), https://www.tn.gov/twra/twra-outdoors-blog/2019/9/9/fall-turkey-calls-that-work.html
+[5] Realtree, "The 10 Commandments of Public Land Turkey Hunting", https://realtree.com/turkey-hunting/articles/the-10-commandments-of-public-land-turkey-hunting
+
 ## Gaps
-- Gobbler yelp / jake yelp, kee-kee alone, fighting purr: not in this set.
+- Gobbler yelp / jake yelp, kee-kee alone, fighting purr: not in either set.
 
 ## Openly licensed alternative (for a public repo)
 Xeno-canto has ~130 Meleagris gallopavo recordings, mostly CC BY-NC-SA (attribution, non-commercial).

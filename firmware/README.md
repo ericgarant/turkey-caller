@@ -21,7 +21,7 @@ The ESP32 runs its own Wi-Fi network, serves the control page from `web/`, and p
 The board is plugged into the Mac by USB.
 
 1. Install PlatformIO once: `brew install platformio` (or the PlatformIO extension in VS Code).
-2. Get the sounds (needs `brew install ffmpeg`), from the repo root:
+2. Get the sounds (needs `brew install ffmpeg`), from the repo root. For the Dindon pack, first copy the five Dindon MP3s into `tools/audio/local/` (see `tools/audio/SOURCES.md`):
    ```sh
    cd tools/audio && ./fetch_turkey_audio.sh
    rm -f ../../firmware/data/sounds/*.mp3
@@ -50,7 +50,7 @@ The page is part of the app binary, so `pio run -t upload` updates it and keeps 
 
 ## Sounds
 
-Clips are `data/sounds/<id>.wav`, where the id is `a-z0-9_`, 24 characters at most. `data/sounds/index.json` (hand-written, in git) gives each id its place, display name and group (`soft`, `loud`, `care`). Files that are not in the index are listed after the others with a name made from the id. A sound in the index without a file is not listed, and a broken file is skipped with a `sound … skipped: <why>` line on serial.
+Clips are `data/sounds/<id>.wav`, where the id is `a-z0-9_`, 24 characters at most. `data/sounds/index.json` (hand-written, in git) gives each id its place, display name and group (`soft`, `loud`, `care`, `pack`). `pack` is the Dindon pack: five calls cut from Eric's own MP3s (purr & clucks, yelp, fast yelp, kee-kee run, gobble). Where each clip comes from and when to use each call is in `tools/audio/SOURCES.md`. Files that are not in the index are listed after the others with a name made from the id. A sound in the index without a file is not listed, and a broken file is skipped with a `sound … skipped: <why>` line on serial.
 
 ## API
 
