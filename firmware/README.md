@@ -55,7 +55,7 @@ Probed on Eric's board on 25 Oct 2026 with `tools/sd-probe` (`pio run -d tools/s
 - GPIO 16 and 17 belong to the PSRAM. GPIO 33 is the LED (F13).
 - GPIO 2 and 15 are strapping pins. If flashing fails with "Failed to connect" while a card is in, take the card out, flash, and put it back.
 - No card or an unreadable card: the board boots and plays the built-ins; serial says `SD card: none`. Inserting a card needs a restart.
-- Power for the board tests: (to fill in: Mac USB or power bank).
+- Power for the board tests: the Mac's USB port.
 
 ## Connect the speaker and test
 
