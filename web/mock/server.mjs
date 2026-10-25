@@ -60,7 +60,7 @@ const boot = Date.now();
 // SD card (F12): present when a pack is inserted or the card is set on; POST /api/mock/sd on=0|1 (empty = flash only again).
 // Off by default so the older tests see a board with flash only (no sd fields); on=1 gives a 1 GB card, on=0 no card.
 // free=N sets the card's free bytes (to test 413). Uploads (F03) go to the card, group "mine".
-let sdOn = null, sdFree = null;
+let sdOn = null, sdFree = null, sndRev = 1;  // sndRev: the status `snd`, bumped when the list changes
 const SD_TOTAL = 960 * 1024 * 1024;
 function sdStatus() {
   if (sdOn === null) return {};
@@ -88,7 +88,7 @@ function status() {
   return {
     ...st, cfg: rev, pos_ms: pos, len_ms: len, plays: 0, underruns: 0,
     heap: 70000 + Math.round(Math.random() * 3000), minHeap: 52880, maxBlock: 40000,
-    fsFree: FS_TOTAL - used, fsTotal: FS_TOTAL, ...sdStatus(), clients: sockets.size || 1,
+    fsFree: FS_TOTAL - used, fsTotal: FS_TOTAL, ...sdStatus(), snd: sndRev, clients: sockets.size || 1,
     uptime: Math.floor((Date.now() - boot) / 1000) + 4380, version: "mock",
   };
 }
@@ -267,6 +267,7 @@ const server = http.createServer(async (req, res) => {
       const why = wavError(raw);
       if (why) return fail(res, 400, why);
       const ms = Math.round(raw.length / BYTES_PER_MS);
+      sndRev++;
       if (old) Object.assign(old, { bytes: raw.length, ms });
       else sounds.push({ id: m[1], name: m[1].replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()), animal: "turkey", group: "mine", hint: "", ms, bytes: raw.length });
       return ok(res);
@@ -276,7 +277,7 @@ const server = http.createServer(async (req, res) => {
       if (i < 0) return fail(res, 404, "no such sound");
       if (sounds[i].group !== "mine") return fail(res, 400, "built-in and pack calls can't be deleted");
       if (cardPlaying()) return fail(res, 409, "stop playback first");
-      sounds.splice(i, 1); return ok(res);
+      sndRev++; sounds.splice(i, 1); return ok(res);
     }
   }
   if (url.pathname.startsWith("/api/")) return fail(res, 404, "not found");

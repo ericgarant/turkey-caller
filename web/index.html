@@ -667,7 +667,7 @@ function paint(){
   // The meter shows the SD card (where recordings go) when the board reports one; older boards report flash only.
   const hasSd=st.sdTotal!=null,tot=hasSd?st.sdTotal:st.fsTotal,free=hasSd?st.sdFree:st.fsFree;
   $("noSd").hidden=!(hasSd&&!st.sdTotal);
-  $("upField").hidden=!EDIT_SOUNDS||(hasSd&&!st.sdTotal);
+  $("upField").hidden=!EDIT_SOUNDS||!st.sdTotal;  // recordings need the card
   if(tot){const used=tot-free;$("fsText").textContent=`${fmtKB(used)} used of ${fmtKB(tot)}`;$("fsBar").style.width=(used/tot*100)+"%"}
   else{$("fsText").textContent="";$("fsBar").style.width="0"}
   const up=st.uptime||0,rows=[["Free memory",st.heap!=null&&fmtKB(st.heap)],["Lowest free memory",st.minHeap!=null&&fmtKB(st.minHeap)],
