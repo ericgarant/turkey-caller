@@ -8,7 +8,9 @@ namespace motion {
 namespace {
 
 #if TC_HAS_PIR
-constexpr int kPirPin = 13;  // soldered; also the SD slot's DAT3, so it stays a plain input (no pulls)
+// GPIO 34: input-only, with no internal pulls, and not on the SD slot (13 was its DAT3). Eric
+// moved the PIR there on 25 Oct after it came off GPIO 13.
+constexpr int kPirPin = 34;
 constexpr int kLedPin = 33;
 #endif
 constexpr uint32_t kHoldMs = 2000;     // LED stays on this long after the sensor drops
