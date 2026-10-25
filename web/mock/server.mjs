@@ -30,7 +30,10 @@ const NEARBY = [
 ];
 
 const cfg = { ap_ssid: "TurkeyCaller", ap_pass: "gobble123", device_name: "Turkey Caller" };
-const st = { bt: "connected", speaker: "Level Box Slim", playing: false, current: "", loop: false, repeat: false, volume: 70 };
+const st = { bt: "connected", speaker: "Level Box Slim", stream: "ready", error: "", playing: false, current: "", loop: false, repeat: false, volume: 70 };
+// Test hook (mock only): POST /api/mock/speaker mode=asleep|off|on. Asleep: connected, stream
+// suspended, a tap wakes it in 1 s. Off: saved but out of reach, a tap gives up after 8 s.
+let speakerMode = "on", wakeTimer = null;
 let playStart = 0, playTimer = null, scanning = false, devices = [];
 let busy = 0, busyUntil = 0;  // test hook (mock only): POST /api/mock/busy count=N (next N API calls) or ms=T (every API call for T ms) answers 503, like the board's busy window
 const boot = Date.now();
@@ -88,7 +91,16 @@ const clamp = (v) => Math.max(0, Math.min(100, Math.round(v) || 0));
 function play(id, loop) {
   const s = sounds.find((x) => x.id === id);
   if (!s) return "bad sound id";
-  if (st.bt !== "connected") return "speaker not connected";
+  if (!st.speaker) return "No speaker connected";
+  st.error = "";
+  if (st.bt !== "connected" || st.stream !== "ready") {  // like the board (F07): answer 202, wake, then play
+    stop(false);
+    clearTimeout(wakeTimer);
+    st.stream = "waking"; push();
+    if (speakerMode === "off") wakeTimer = setTimeout(() => { Object.assign(st, { stream: "down", error: "Speaker did not answer" }); push(); }, 8000);
+    else wakeTimer = setTimeout(() => { Object.assign(st, { bt: "connected", stream: "ready" }); speakerMode = "on"; play(id, loop); }, 1000);
+    return "waking";
+  }
   clearTimeout(playTimer);
   Object.assign(st, { playing: true, current: id, loop, repeat: loop });
   playStart = Date.now();
@@ -104,7 +116,11 @@ function setRepeat(on) {
   }
   push();
 }
-function stop() { clearTimeout(playTimer); st.playing = false; st.current = ""; push(); }
+function stop(cancelWake = true) {
+  clearTimeout(playTimer);
+  if (cancelWake && st.stream === "waking") { clearTimeout(wakeTimer); st.stream = st.bt === "connected" ? "suspended" : "down"; }
+  st.playing = false; st.current = ""; push();
+}
 
 // ---- HTTP ----
 const json = (res, code, obj) => { res.writeHead(code, { "Content-Type": "application/json" }); res.end(JSON.stringify(obj)); };
@@ -132,7 +148,17 @@ const server = http.createServer(async (req, res) => {
       return res.end(fs.readFileSync(PAGE));
     case "GET /api/status": return json(res, 200, status());
     case "GET /api/sounds": return json(res, 200, sounds);
-    case "POST /api/play": { const e = play(p.id, p.loop === "1" || p.loop === "true"); return e ? fail(res, e.startsWith("speaker") ? 409 : 400, e) : ok(res); }
+    case "POST /api/play": {
+      const e = play(p.id, p.loop === "1" || p.loop === "true");
+      if (e === "waking") return json(res, 202, { ok: true, waking: true });
+      return e ? fail(res, /speaker/i.test(e) ? 409 : 400, e) : ok(res);
+    }
+    case "POST /api/mock/speaker":
+      speakerMode = p.mode || "on";
+      if (speakerMode === "asleep") Object.assign(st, { bt: "connected", stream: "suspended" });
+      else if (speakerMode === "off") { stop(); Object.assign(st, { bt: "idle", stream: "down" }); }
+      else Object.assign(st, { bt: "connected", stream: "ready" });
+      push(); return ok(res);
     case "POST /api/stop": stop(); return ok(res);
     case "POST /api/repeat": if (p.on === undefined) return fail(res, 400, "missing on"); setRepeat(p.on === "1" || p.on === "true"); return ok(res);
     case "POST /api/volume": if (p.level === undefined) return fail(res, 400, "missing level"); st.volume = clamp(+p.level); push(); return ok(res);
@@ -143,12 +169,13 @@ const server = http.createServer(async (req, res) => {
       return ok(res);
     case "GET /api/bt/devices": return json(res, 200, { scanning, devices });
     case "POST /api/bt/connect": {
-      if (!p.name) return fail(res, 400, "missing name");
-      Object.assign(st, { bt: "connecting", speaker: p.name }); push();
-      setTimeout(() => { st.bt = "connected"; push(); }, 2500);
+      if (!p.name && !p.addr) return fail(res, 400, "missing addr");
+      if (p.addr && !/^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/i.test(p.addr)) return fail(res, 400, "addr must look like aa:bb:cc:dd:ee:ff");
+      Object.assign(st, { bt: "connecting", stream: "down", error: "", speaker: p.name || p.addr }); push();
+      setTimeout(() => { Object.assign(st, { bt: "connected", stream: "ready" }); push(); }, 2500);
       return ok(res);
     }
-    case "POST /api/bt/forget": stop(); Object.assign(st, { bt: "idle", speaker: "" }); push(); return ok(res);
+    case "POST /api/bt/forget": stop(); Object.assign(st, { bt: "idle", stream: "down", error: "", speaker: "" }); push(); return ok(res);
     case "GET /api/config": return json(res, 200, { ap_ssid: cfg.ap_ssid, device_name: cfg.device_name });
     case "POST /api/config":
       if (!p.ap_ssid || p.ap_ssid.length > 32) return fail(res, 400, "Wi-Fi name must be 1 to 32 characters");
