@@ -17,6 +17,7 @@ constexpr uint32_t kMaxPackClipMs = 60000;  // F14: pack clips up to 60 s each
 Sound *sounds = nullptr;  // exactly `n` entries, in PSRAM when the board has it (F14)
 size_t n = 0;
 uint32_t freeBytes = 0, totalBytes = 0;
+volatile uint32_t listRev = 0;
 portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
 
 // PSRAM when there is some (WROVER-E), else the normal heap (WROOM).
@@ -285,6 +286,7 @@ void begin() {
   n = count;
   totalBytes = total;
   freeBytes = total > used ? total - used : 0;
+  listRev = listRev + 1;
   portEXIT_CRITICAL(&lock);
   free(old);
   Serial.printf("library: %u sounds, %u of %u bytes free\n", (unsigned)count, (unsigned)freeBytes, (unsigned)totalBytes);
@@ -325,6 +327,7 @@ bool builtIn(const char *id) {
   return find(id, s) && !s.card;
 }
 
+uint32_t rev() { return listRev; }
 uint32_t fsFree() { return freeBytes; }
 uint32_t fsTotal() { return totalBytes; }
 

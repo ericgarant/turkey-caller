@@ -175,8 +175,8 @@ nav button[aria-current="page"]{color:var(--accent)}
           <ul class="list" id="sndList"></ul>
           <div class="field" id="upField" style="margin-top:10px" hidden>
             <label for="upFile">Add a sound</label>
-            <input type="file" id="upFile" accept=".wav,audio/wav">
-            <span class="sub" id="upNote">Mono WAV, IMA ADPCM, 22.05 kHz (made by tools/audio). The file name becomes the button name. Not possible while a call is playing.</span>
+            <input type="file" id="upFile" accept="audio/*">
+            <span class="sub" id="upNote">Any recording your phone can play (MP3, M4A, WAV), up to 60 s. It is saved on the SD card under "Your recordings", and the file name becomes the button name.</span>
           </div>
         </div>
       </div>
@@ -319,7 +319,7 @@ function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTime
 
 // ---- HTTP ----
 async function api(path,params,method){
-  const opt={method:method||(params?"POST":"GET")};
+  const opt={method:method||(params?"POST":"GET"),cache:"no-store"};  // never an old sound list from the cache
   if(params){opt.body=new URLSearchParams(params);opt.headers={"Content-Type":"application/x-www-form-urlencoded"}}
   let r;
   for(let i=0;;i++){  // 503 = the board is busy or low on memory: wait and retry
@@ -344,9 +344,11 @@ function onStatus(s){
   if(s.error&&s.error!==st.error)toast(s.error);  // e.g. "Speaker did not answer" after a wake
   // During our own save, rev+1 is our save (if the other phone saved instead, our POST gets 409 and reloads)
   const cfgMoved=s.cfg!=null&&cfg&&s.cfg!==cfg.rev&&!(cfgBusy&&s.cfg===cfg.rev+1);
+  const sndMoved=s.snd!=null&&st.snd!=null&&s.snd!==st.snd;  // a phone added or deleted a recording (F03)
   st=Object.assign(st,s);stAt=Date.now();lastOk=Date.now();
   if(restarting&&Date.now()-restarting>4000){restarting=0;loadSounds();loadConfig()}
   else if(cfgMoved)loadConfig();
+  if(sndMoved&&!restarting)loadSounds();
   if(Date.now()-offlineSticky>3000)$("offline").hidden=true;
   paint();
 }
@@ -495,11 +497,11 @@ forget.onclick=async()=>{
 };
 
 // ---- Settings: sounds ----
-// Adding and deleting sounds from the phone is deferred (F03), so those controls stay hidden.
-const EDIT_SOUNDS=false;
-$("upField").hidden=!EDIT_SOUNDS;
+// Recordings from the phone go to the SD card (F03, F12); only they can be deleted.
+const EDIT_SOUNDS=true;
+$("upField").hidden=true;  // shown by paint() once the board reports a card
 function renderSounds(){
-  $("sndList").innerHTML=sounds.map(s=>`<li><div class="grow"><div class="nm">${esc(s.name)}</div><div class="sub mono">${esc(s.id)}.wav${s.ms?" · "+fmtS(s.ms):""}${s.bytes?" · "+fmtKB(s.bytes):""}</div></div>${EDIT_SOUNDS?`<button class="btn danger" type="button" data-del="${esc(s.id)}">Delete</button>`:""}</li>`).join("");
+  $("sndList").innerHTML=sounds.map(s=>`<li><div class="grow"><div class="nm">${esc(s.name)}</div><div class="sub mono">${esc(s.id)}.wav${s.ms?" · "+fmtS(s.ms):""}${s.bytes?" · "+fmtKB(s.bytes):""}</div></div>${EDIT_SOUNDS&&s.group==="mine"?`<button class="btn danger" type="button" data-del="${esc(s.id)}">Delete</button>`:""}</li>`).join("");
   $("sndList").querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{
     if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Tap to confirm";setTimeout(()=>{if(b.isConnected){delete b.dataset.armed;b.textContent="Delete"}},3000);return}
     b.disabled=true;
@@ -507,30 +509,58 @@ function renderSounds(){
     catch(e){b.disabled=false;toast(/409|playing/i.test(e.message)?"Stop the call first, then delete":why(e))}
   });
 }
+// The phone converts any recording to what the board plays (F03): mono IMA ADPCM WAV,
+// 22.05 kHz, 256-byte blocks, peak at 90%, 60 s at most.
+const RATE=22050,BLK=256,SPB=505,MAXS=60;
+const ISTEP=[7,8,9,10,11,12,13,14,16,17,19,21,23,25,28,31,34,37,41,45,50,55,60,66,73,80,88,97,107,118,130,143,157,173,190,209,230,253,279,307,337,371,408,449,494,544,598,658,724,796,876,963,1060,1166,1282,1411,1552,1707,1878,2066,2272,2499,2749,3024,3327,3660,4026,4428,4871,5358,5894,6484,7132,7845,8630,9493,10442,11487,12635,13899,15289,16818,18500,20350,22385,24623,27086,29794,32767],IIDX=[-1,-1,-1,-1,2,4,6,8];
+async function toWav(f){
+  const AC=window.AudioContext||window.webkitAudioContext,ac=new AC();let dec;
+  try{const b=await f.arrayBuffer();dec=await new Promise((ok,no)=>ac.decodeAudioData(b,ok,no))}
+  catch(_){throw new Error("This phone cannot read that file")}finally{try{ac.close()}catch(_){}}
+  const secs=Math.min(dec.duration,MAXS),n=Math.max(1,Math.ceil(secs*RATE));
+  const off=new OfflineAudioContext(1,n,RATE),src=off.createBufferSource();src.buffer=dec;src.connect(off.destination);src.start();
+  const pcm=(await off.startRendering()).getChannelData(0);
+  let pk=0;for(let i=0;i<n;i++){const a=Math.abs(pcm[i]);if(a>pk)pk=a}
+  const g=pk>0?0.9/pk*32767:0,smp=i=>i<n?Math.max(-32768,Math.min(32767,Math.round(pcm[i]*g))):0;
+  const nb=Math.ceil(n/SPB),d=new Uint8Array(60+nb*BLK),v=new DataView(d.buffer);let o=60,pred=0,idx=0;
+  for(let b=0;b<nb;b++){const base=b*SPB;pred=smp(base);v.setInt16(o,pred,true);d[o+2]=idx;o+=4;
+    for(let k=1;k<SPB;k+=2){let by=0;for(let h=0;h<2;h++){let st=ISTEP[idx],df=smp(base+k+h)-pred,c=0,q=st>>3;if(df<0){c=8;df=-df}
+      if(df>=st){c|=4;df-=st;q+=st}st>>=1;if(df>=st){c|=2;df-=st;q+=st}st>>=1;if(df>=st){c|=1;q+=st}
+      pred=Math.max(-32768,Math.min(32767,pred+(c&8?-q:q)));idx=Math.max(0,Math.min(88,idx+IIDX[c&7]));by|=c<<(h*4)}d[o++]=by}}
+  const tag=(p,t)=>{for(let i=0;i<4;i++)d[p+i]=t.charCodeAt(i)},w32=(p,x)=>v.setUint32(p,x,true),w16=(p,x)=>v.setUint16(p,x,true);
+  tag(0,"RIFF");w32(4,d.length-8);tag(8,"WAVE");tag(12,"fmt ");w32(16,20);w16(20,0x11);w16(22,1);w32(24,RATE);w32(28,Math.round(RATE*BLK/SPB));
+  w16(32,BLK);w16(34,4);w16(36,2);w16(38,SPB);tag(40,"fact");w32(44,4);w32(48,n);tag(52,"data");w32(56,nb*BLK);
+  return {blob:new Blob([d],{type:"audio/wav"}),ms:Math.round(secs*1000),cut:dec.duration>MAXS+0.05};
+}
 const UP_NOTE=$("upNote").innerHTML;
-$("upFile").onchange=e=>{
+$("upFile").onchange=async e=>{
   const f=e.target.files[0];e.target.value="";if(!f)return;
-  const id=f.name.replace(/\.wav$/i,"").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"").slice(0,24);
-  if(!/\.wav$/i.test(f.name)||!id){toast("Pick a .wav file");return}
+  const id=f.name.replace(/\.[^.]*$/,"").toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"").slice(0,24);
+  if(!id){toast("Rename the file with letters or digits first");return}
+  const note=$("upNote");note.textContent=`Converting ${f.name}…`;
+  let w;try{w=await toWav(f)}catch(x){note.innerHTML=UP_NOTE;toast(x.message);return}
+  note.innerHTML=UP_NOTE;
   const old=sounds.find(s=>s.id===id);
-  if(!old)return upload(f,id);
-  // Same name as an existing sound: ask before replacing it
-  const note=$("upNote");
+  if(old&&old.group!=="mine"){toast(`"${id}" is the name of a built-in call. Rename the file first`);return}
+  const go=()=>{note.innerHTML=UP_NOTE;upload(w,id,!!old)};
+  if(!old)return go();
+  // Same name as an existing recording: ask before replacing it
   note.innerHTML=`<b>${esc(old.name)}</b> is already on the caller. <button class="btn" type="button" id="upYes">Replace it</button> <button class="btn" type="button" id="upNo">Keep it</button>`;
-  $("upYes").onclick=()=>{note.innerHTML=UP_NOTE;upload(f,id,old.bytes)};
+  $("upYes").onclick=go;
   $("upNo").onclick=()=>{note.innerHTML=UP_NOTE};
 };
-function upload(f,id,freed){
-  if(st.playing){toast("Stop the call first, then add the sound");return}
-  const room=st.sdTotal!=null?st.sdFree:st.fsFree;
-  if(room!=null&&f.size>room+(freed||0)-8192){toast(`Not enough room: ${fmtKB(f.size)} needed, ${fmtKB(room)} free`);return}
-  const fd=new FormData();fd.append("file",f,id+".wav");
+function upload(w,id,replace){
+  if(w.cut)toast(`Kept the first ${MAXS} s`);
+  const size=w.blob.size,room=st.sdFree;
+  // The old file stays until the new one is complete, so a replace needs room for both.
+  if(room!=null&&size+32768>room){toast(`Not enough room: ${fmtKB(size)} needed, ${fmtKB(room)} free`);return}
+  const fd=new FormData();fd.append("file",w.blob,id+".wav");
   const x=new XMLHttpRequest(),note=$("upNote");
   x.open("POST","/api/sounds");
-  x.upload.onprogress=p=>{if(p.lengthComputable)note.textContent=`Uploading ${id}.wav… ${Math.round(p.loaded/p.total*100)}%`};
-  x.onload=()=>{note.innerHTML=UP_NOTE;
-    if(x.status<300){toast((freed?"Replaced ":"Added ")+id);loadSounds()}
-    else toast(x.status===409?"Stop the call first, then add the sound":x.status===413?"Not enough room on the caller":"Upload failed ("+x.status+")")};
+  x.upload.onprogress=p=>{if(p.lengthComputable)note.textContent=`Uploading ${id} (${fmtS(w.ms)}, ${fmtKB(size)})… ${Math.round(p.loaded/p.total*100)}%`};
+  x.onload=()=>{note.innerHTML=UP_NOTE;let m="";try{m=JSON.parse(x.responseText).error||""}catch(_){}
+    if(x.status<300){toast((replace?"Replaced ":"Added ")+id);loadSounds()}
+    else toast(x.status===409&&/playback/.test(m)?"Stop the call first, then add the sound":x.status===413?"Not enough room on the caller":m||"Upload failed ("+x.status+")")};
   x.onerror=()=>{note.innerHTML=UP_NOTE;toast("Upload failed. Are you on the caller's Wi-Fi?")};
   x.send(fd);
 }
@@ -637,7 +667,7 @@ function paint(){
   // The meter shows the SD card (where recordings go) when the board reports one; older boards report flash only.
   const hasSd=st.sdTotal!=null,tot=hasSd?st.sdTotal:st.fsTotal,free=hasSd?st.sdFree:st.fsFree;
   $("noSd").hidden=!(hasSd&&!st.sdTotal);
-  $("upField").hidden=!EDIT_SOUNDS||(hasSd&&!st.sdTotal);
+  $("upField").hidden=!EDIT_SOUNDS||!st.sdTotal;  // recordings need the card
   if(tot){const used=tot-free;$("fsText").textContent=`${fmtKB(used)} used of ${fmtKB(tot)}`;$("fsBar").style.width=(used/tot*100)+"%"}
   else{$("fsText").textContent="";$("fsBar").style.width="0"}
   const up=st.uptime||0,rows=[["Free memory",st.heap!=null&&fmtKB(st.heap)],["Lowest free memory",st.minHeap!=null&&fmtKB(st.minHeap)],
