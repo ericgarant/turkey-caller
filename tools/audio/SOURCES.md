@@ -92,18 +92,19 @@ The API (v3) needs a free account key. Macaulay Library (Cornell) does not allow
 - WAV mono 16-bit 22.05 kHz ~ 44 KB/s: 11 clips ~ 2.9 MB, too big next to the firmware. Only use WAV for a few short clips.
 - MP3 needs a decoder on the ESP32 (e.g. libhelix in arduino-audio-tools / ESP32-A2DP).
 
-## Moose pack (Eric's own MP3s, 6 calls, on the SD card)
-Six tracks Eric supplied (French names), stereo 44.1 kHz 192 kbps MP3, 7.5 to 31 s. Origin and licence are not in the
-files: personal use, never committed. Put them in `tools/audio/local/moose/` (names start with `01_` to `06_`) and run
-`tools/audio/make_moose_pack.sh`. Same cleanup as the others (silence trim, -14 LUFS, mono, IMA ADPCM 22.05 kHz) but
-no 10 s cap: the clips are kept whole. Output: `tools/audio/data-sd/packs/moose/` (git-ignored), copied to the SD card
-as `/packs/moose/`. See `docs/features/F14-call-packs.md`.
+## Moose and deer packs (Eric's own MP3s, on the SD card)
+22 tracks Eric supplied from three folders, 0.7 to 36 s. Origin and licence are not in the files: personal use, never
+committed. Copy each folder's MP3s into its own folder under `tools/audio/local/`, then run
+`tools/audio/make_call_packs.sh`:
 
-| File | Shown as | Source track | Clip |
-|---|---|---|---|
-| moose_cow_heat.wav | Cow in heat | 01 Femelle chaleur | 23.9 s, 259 KB |
-| moose_cow_moan.wav | Cow moan | 02 Plainte femelle | 19.9 s, 215 KB |
-| moose_bull_tending.wav | Tending grunt | 03 Rot Mâle Tending | 6.4 s, 69 KB |
-| moose_rake.wav | Antler rake | 04 Rackling | 13.7 s, 148 KB |
-| moose_bull_grunt.wav | Bull grunt | 05 Rot Mâle | 17.4 s, 188 KB |
-| moose_bull_trail.wav | Trailing grunt | 06 Rot Mâle trail | 3.9 s, 42 KB |
+| Eric's folder | Local folder | Goes to |
+|---|---|---|
+| MooseCalls | `local/moose-calls/` | 01 to 07 moose, 08 to 10 deer (by file name) |
+| MoosePreRutCalls | `local/moose-prerut/` | moose |
+| DeerCalls | `local/deer-calls/` | deer (Eric confirmed, 25 Oct) |
+
+Same cleanup as the others (silence trim, -14 LUFS, mono, IMA ADPCM 22.05 kHz), but no 10 s cap, so the clips are kept
+whole. The ids, names, hints and order are in the script's table. Output: `tools/audio/data-sd/packs/moose/` (13 calls)
+and `tools/audio/data-sd/packs/deer/` (9 calls), about 1.9 MB together (git-ignored). Copy `packs/` to the SD card as
+`/packs/`. See `docs/features/F14-call-packs.md`.
+
