@@ -109,6 +109,23 @@ try {
     const c = await get("/api/config");
     assert.ok(!("ap_pass" in c));
   }, { risky: true });
+  await step("config sync (F05): rev in config and status, stale rev refused, name-only change needs no restart", async () => {
+    const c = await get("/api/config");
+    assert.equal(typeof c.rev, "number");
+    assert.equal(typeof c.default_pass, "boolean");
+    assert.equal((await get("/api/status")).cfg, c.rev);
+    const stale = await post("/api/config", { ap_ssid: c.ap_ssid, device_name: "Stale phone", rev: c.rev - 1 });
+    assert.equal(stale.code, 409);
+    assert.equal((await get("/api/config")).device_name, c.device_name, "nothing saved on 409");
+    assert.equal((await post("/api/config", { ap_ssid: c.ap_ssid, device_name: "x".repeat(25), rev: c.rev })).code, 400);
+    const r = await post("/api/config", { ap_ssid: c.ap_ssid, device_name: "Ridge blind", rev: c.rev });
+    assert.deepEqual(r.body, { ok: true, restart: false });
+    const c2 = await get("/api/config");
+    assert.equal(c2.device_name, "Ridge blind");
+    assert.notEqual(c2.rev, c.rev);
+    assert.equal((await get("/api/status")).cfg, c2.rev);
+    await post("/api/config", { ap_ssid: c.ap_ssid, device_name: c.device_name, rev: c2.rev });
+  }, { risky: true });
   await step("forget stops playback; play without a speaker is 409; connect needs a name", async () => {
     await post("/api/play", { id: "cluck", loop: "1" });
     await post("/api/bt/forget");

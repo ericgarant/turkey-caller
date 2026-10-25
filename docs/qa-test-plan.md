@@ -9,6 +9,7 @@ Test setup: ESP32 plugged into the Mac (power and serial log), speaker charged a
 | Test | What it covers |
 |---|---|
 | `npm run test:api` | API contract on the mock: status fields, sound list shape, play/replace/stop, 400/404/409/413 errors, volume clamp, upload and delete rules, config validation, forget and reconnect |
+| `node web/test/settings.mjs` | Two phones on the mock: F05 settings sync live, edits in progress kept, stale saves refused, Wi-Fi change and BOOT reset rejoin messages, volume and Repeat shared |
 | `npm test` (smoke) | Page flows in a phone-sized browser: 12 calls, play/stop, volume, speaker forget/search/use, upload/delete hidden (F03 deferred), Wi-Fi settings, dawn mode |
 | `npm run stress` | 50 rapid plays (150 ms apart) against the mock; same pass rule as the board test B9 |
 
