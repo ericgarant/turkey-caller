@@ -19,7 +19,10 @@ const sounds = [
   ["cluck_purr", "Cluck & purr", "soft", 4800], ["whine", "Whine", "soft", 5000],
   ["plain_yelp", "Plain yelp", "loud", 3600], ["assembly_yelp", "Assembly yelp", "loud", 8400],
   ["cutting", "Cutting", "loud", 4200], ["fly_down_cackle", "Fly-down cackle", "loud", 3000],
-  ["kee_kee_run", "Kee-kee run", "loud", 5200], ["gobble", "Gobble", "care", 2600], ["putt", "Putt", "care", 1200],
+  ["gobble", "Gobble", "care", 2600], ["putt", "Putt", "care", 1200],
+  ["dindon_purr", "Purr & clucks", "pack", 7500], ["dindon_yelp", "Yelp", "pack", 3200],
+  ["dindon_fast_yelp", "Fast yelp", "pack", 3100], ["dindon_kee_kee", "Kee-kee run", "pack", 3800],
+  ["dindon_gobble", "Gobble", "pack", 2900],
 ].map(([id, name, group, ms]) => ({ id, name, group, ms, bytes: ms * BYTES_PER_MS }));
 
 const NEARBY = [

@@ -213,9 +213,12 @@ const INFO={
   tree_call:["soft","On the roost, before fly-down"],cluck:["soft","Single notes, bird close in"],purr:["soft","Content, feeding"],
   cluck_purr:["soft","Finishes a bird"],whine:["soft","Soft feeding sound"],plain_yelp:["loud","Basic hen call, all day"],
   assembly_yelp:["loud","Long series, gathers a flock"],cutting:["loud","Excited hen, fires up a gobbler"],
-  fly_down_cackle:["loud","First light, sells the fly-down"],kee_kee_run:["loud","Lost young bird, fall season"],
-  gobble:["care","Locator. Draws other hunters"],putt:["care","Alarm call, usually spooks birds"]};
-const GROUPS={soft:"Soft calls",loud:"Louder calls",care:"Use with care",other:"Other sounds"};
+  fly_down_cackle:["loud","First light, sells the fly-down"],
+  gobble:["care","Locator. Draws other hunters"],putt:["care","Alarm call, usually spooks birds"],
+  dindon_purr:["pack","Bird close and wary, calms it in"],dindon_yelp:["pack","Spring or fall, start soft, all day"],
+  dindon_fast_yelp:["pack","Hung-up or henned-up gobbler"],dindon_kee_kee:["pack","Fall, 20 min after a flock scatters"],
+  dindon_gobble:["pack","Last resort. Draws other hunters"]};
+const GROUPS={soft:"Soft calls",loud:"Louder calls",care:"Use with care",pack:"Dindon pack",other:"Other sounds"};
 const BT_TEXT={connected:"Connected",connecting:"Connecting…",searching:"Looking for speaker…",idle:"No speaker"};
 
 const $=id=>document.getElementById(id);
@@ -303,7 +306,7 @@ function renderCalls(){
     sec.innerHTML=`<h2>${GROUPS[g]}</h2><div class="grid"></div>`;
     for(const s of list){
       const b=document.createElement("button");
-      b.type="button";b.className="call"+(g==="care"?" care":"");b.dataset.id=s.id;
+      b.type="button";b.className="call"+(g==="care"||s.id==="dindon_gobble"?" care":"");b.dataset.id=s.id;
       b.innerHTML=`<span class="nm">${esc(s.name)}</span><span class="foot"><span class="hint">${esc(s.hint)}</span><span class="len">${fmtS(s.ms)}</span></span><i class="bar"></i>`;
       b.onclick=()=>tapCall(s);
       sec.lastChild.appendChild(b);

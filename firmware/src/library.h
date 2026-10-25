@@ -8,7 +8,7 @@ namespace library {
 struct Sound {
   char id[25];     // file name without .wav: a-z0-9_, at most 24 characters
   char name[33];   // display name
-  char group[6];   // soft, loud, care or "" (shown under "Other sounds")
+  char group[6];   // soft, loud, care, pack (Dindon pack) or "" (shown under "Other sounds")
   uint32_t bytes;  // file size
   uint32_t ms;     // length from the WAV header
 };

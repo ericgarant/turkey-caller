@@ -62,13 +62,13 @@ try {
     const a = await phone();
     for (const k of ["bt", "speaker", "playing", "current", "loop", "repeat", "volume", "heap", "minHeap", "underruns"]) assert.ok(k in a.last, "missing " + k);
   });
-  await step("sound list: 12 calls in order, three groups, unique ids", async () => {
+  await step("sound list: 16 calls in order, four groups, unique ids", async () => {
     const list = await get("/api/sounds");
-    assert.equal(list.length, 12);
-    assert.equal(new Set(list.map((s) => s.id)).size, 12);
-    assert.deepEqual([...new Set(list.map((s) => s.group))], ["soft", "loud", "care"]);
+    assert.equal(list.length, 16);
+    assert.equal(new Set(list.map((s) => s.id)).size, 16);
+    assert.deepEqual([...new Set(list.map((s) => s.group))], ["soft", "loud", "care", "pack"]);
   });
-  await step("every one of the 12 calls plays and reports its length", async () => {
+  await step("every one of the 16 calls plays and reports its length", async () => {
     for (const s of await get("/api/sounds")) {
       assert.equal((await post("/api/play", { id: s.id, loop: "0" })).code, 200, s.id);
       const st = await status();
@@ -279,11 +279,11 @@ try {
   await parked("upload adds a sound, it plays, delete removes it", WHY, async () => {
     assert.equal((await upload("owl_hoot.wav", 8000)).code, 200);
     const list = await get("/api/sounds");
-    assert.equal(list.length, 13);
+    assert.equal(list.length, 17);
     assert.equal((await post("/api/play", { id: "owl_hoot" })).code, 200);
     await post("/api/stop");
     assert.equal((await post("/api/sounds/delete", { id: "owl_hoot" })).code, 200);
-    assert.equal((await get("/api/sounds")).length, 12);
+    assert.equal((await get("/api/sounds")).length, 16);
   });
   await parked("upload and delete are refused with 409 while a call plays", WHY, async () => {
     await post("/api/play", { id: "assembly_yelp", loop: "1" });
@@ -296,7 +296,7 @@ try {
     assert.equal((await upload("Bad Name.wav", 4000)).code, 400);
     assert.equal((await upload("big.wav", 2 * 1024 * 1024)).code, 413);
     assert.equal((await upload("cluck.wav", 9000)).code, 200);
-    assert.equal((await get("/api/sounds")).length, 12);
+    assert.equal((await get("/api/sounds")).length, 16);
     assert.equal((await post("/api/sounds/delete", { id: "nope" })).code, 404);
   });
 } finally {
