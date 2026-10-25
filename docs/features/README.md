@@ -18,6 +18,7 @@ Specs for what comes after Phase 0 (the Wi-Fi test page and Bluetooth ADPCM play
 | F10 | [Memory and stability floor](F10-heap-floor.md) | Everyone (cross-cutting) | B9, B16 |
 | F11 | [Future Cooboom speaker](F11-cooboom-speaker.md) | Firmware, QA | B2 to B12 rerun |
 | F12 | [Move to the WROVER-E board with an SD card](F12-wrover-sd.md) | Firmware, web | new B18 |
+| F13 | [Motion sensor and LED](F13-motion-led.md) | Firmware and web (step 1: LED and its setting; step 2 later) | new B19 |
 
 ## Suggested build order
 
@@ -28,7 +29,8 @@ Specs for what comes after Phase 0 (the Wi-Fi test page and Bluetooth ADPCM play
 5. F05.
 6. F12: move to the WROVER-E and its SD card (Eric's decision, 25 Oct 2026).
 7. F03 on top of F12: uploads go to the SD card.
-8. F11 when the Cooboom arrives.
+8. F13 step 1: the LED lights on motion (small, any time after F12). Step 2, motion plays a chosen call, waits until Eric asks.
+9. F11 when the Cooboom arrives.
 
 ## Deferred, then resumed
 
