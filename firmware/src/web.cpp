@@ -69,6 +69,14 @@ String param(AsyncWebServerRequest *req, const char *name) {
   return "";
 }
 
+// GET replies must never come from a phone's cache: after one phone adds or deletes a
+// recording, a cached /api/sounds kept the other phone on the old list, even after a reload.
+void sendJson(AsyncWebServerRequest *req, const String &j) {
+  AsyncWebServerResponse *res = req->beginResponse(200, "application/json", j);
+  res->addHeader("Cache-Control", "no-store");
+  req->send(res);
+}
+
 void sendOk(AsyncWebServerRequest *req) { req->send(200, "application/json", "{\"ok\":true}"); }
 
 void sendError(AsyncWebServerRequest *req, int code, const char *msg) {
@@ -144,7 +152,7 @@ String statusJson() {
 
 void handleStatus(AsyncWebServerRequest *req) {
   if (lowMemory(req)) return;
-  req->send(200, "application/json", statusJson());
+  sendJson(req, statusJson());
 }
 
 void handleSounds(AsyncWebServerRequest *req) {
@@ -168,7 +176,7 @@ void handleSounds(AsyncWebServerRequest *req) {
     j += ",\"bytes\":" + String(s.bytes) + ",\"ms\":" + String(s.ms) + "}";
   }
   j += ']';
-  req->send(200, "application/json", j);
+  sendJson(req, j);
 }
 
 bool truthy(const String &v) { return v == "1" || v == "true"; }
@@ -226,7 +234,7 @@ void handleDevices(AsyncWebServerRequest *req) {
     j += ",\"rssi\":" + String(list[i].rssi) + "}";
   }
   j += "]}";
-  req->send(200, "application/json", j);
+  sendJson(req, j);
 }
 
 void handleConnect(AsyncWebServerRequest *req) {
@@ -260,7 +268,7 @@ void handleConfigGet(AsyncWebServerRequest *req) {
   j += ",\"default_pass\":";
   j += settings::defaultPass() ? "true" : "false";
   j += ",\"rev\":" + String(settings::rev()) + "}";
-  req->send(200, "application/json", j);
+  sendJson(req, j);
 }
 
 bool hasParam(AsyncWebServerRequest *req, const char *name) { return req->hasParam(name, true) || req->hasParam(name); }

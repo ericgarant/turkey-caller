@@ -319,7 +319,7 @@ function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTime
 
 // ---- HTTP ----
 async function api(path,params,method){
-  const opt={method:method||(params?"POST":"GET")};
+  const opt={method:method||(params?"POST":"GET"),cache:"no-store"};  // never an old sound list from the cache
   if(params){opt.body=new URLSearchParams(params);opt.headers={"Content-Type":"application/x-www-form-urlencoded"}}
   let r;
   for(let i=0;;i++){  // 503 = the board is busy or low on memory: wait and retry
