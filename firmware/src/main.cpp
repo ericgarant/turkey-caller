@@ -8,6 +8,7 @@
 #include "player.h"
 #include "sdcard.h"
 #include "settings.h"
+#include "ui.h"
 #include "version.h"
 #include "web.h"
 
@@ -38,6 +39,8 @@ void setup() {
   web::begin();
   heapLog("wifi+web");
   heapmon::begin();
+  ui::begin();  // F15: the box's screen and buttons (WROVER only); after the player, bt and web
+  heapLog("ui");
   Serial.printf("Ready. Join Wi-Fi \"%s\" (%s password), open http://192.168.4.1\n", settings::apSsid(),
                 settings::defaultPass() ? "factory" : "your own");
 }

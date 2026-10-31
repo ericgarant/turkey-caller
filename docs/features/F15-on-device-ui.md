@@ -10,7 +10,7 @@
 
 | Part | Signal | GPIO | Notes |
 |---|---|---|---|
-| LCD Module 1602, I2C backpack | SDA | 21 | Default I2C pins, as in the Freenove LCD tutorial. 400 kHz in the firmware (see the probe results) |
+| LCD Module 1602, I2C backpack | SDA | 21 | Default I2C pins, as in the Freenove LCD tutorial. 100 kHz, the PCF8574 backpack's rated speed |
 | | SCL | 22 | |
 | | VCC | 5V | As in the Freenove tutorial (the text is too faint at 3.3 V). The contrast screw on the back sets how dark the text is |
 | | GND | GND | |
@@ -79,7 +79,7 @@ Cow moan
 
 - New module `ui`, built only with `TC_HAS_UI` (set for `wrover`, not for `wroom`, like `TC_HAS_SD`). It calls the same play, stop, volume and Repeat code as `web`; it never touches the player or Bluetooth state directly. The shared Repeat switch moves out of `web.cpp` so both modules set the same one.
 - Buttons: 30 ms debounce, a hold after 1 s. A press is never lost while the screen is being rewritten: reading the buttons must not wait on the LCD.
-- A full 2-line rewrite took 59 ms at 100 kHz on the probe. The firmware runs I2C at 400 kHz and writes only the characters that changed (the timer is 4 of them), so most updates are a few ms.
+- A full 2-line rewrite took 59 ms at 100 kHz on the probe. The firmware stays at 100 kHz (the PCF8574 is rated for it) and writes only the characters that changed (a timer tick is one or two), so most updates take a few ms. The buttons are sampled by a 5 ms timer, apart from the screen.
 - The screen is written only by the `ui` task, only after a press or a state change (at most every 250 ms while playing for the timer). The task runs at a lower priority than the player's decode task (priority 5 on core 1), so pressing buttons can't cause a dropout.
 - The task's stack is 3 KB or less, from internal RAM. The LCD library is LiquidCrystal_I2C (the one the Freenove tutorial uses), pinned to an exact version.
 - F10 and the 2.25 MB budget still apply: the PR reports `minHeap` and the app size against main.
