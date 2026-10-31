@@ -41,8 +41,11 @@ void setup() {
   heapmon::begin();
   ui::begin();  // F15: the box's screen and buttons (WROVER only); after the player, bt and web
   heapLog("ui");
-  Serial.printf("Ready. Join Wi-Fi \"%s\" (%s password), open http://192.168.4.1\n", settings::apSsid(),
-                settings::defaultPass() ? "factory" : "your own");
+  if (web::wifiOn())
+    Serial.printf("Ready. Join Wi-Fi \"%s\" (%s password), open http://192.168.4.1\n", settings::apSsid(),
+                  settings::defaultPass() ? "factory" : "your own");
+  else
+    Serial.println("Ready, phone-free: use the box's buttons");
 }
 
 void loop() {
