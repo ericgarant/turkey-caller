@@ -20,6 +20,7 @@ Specs for what comes after Phase 0 (the Wi-Fi test page and Bluetooth ADPCM play
 | F12 | [Move to the WROVER-E board with an SD card](F12-wrover-sd.md) | Firmware, web | new B18 |
 | F13 | [Motion sensor and LED](F13-motion-led.md) | **Dropped** (Eric removed the PIR and LED, 25 Oct 2026) | — |
 | F14 | [Call packs: deer, moose and more](F14-call-packs.md) | Web (done with the spec), firmware after F12 | new B20 |
+| F15 | [Screen and buttons on the box](F15-on-device-ui.md) | Firmware (probe first, then the `ui` module) | new B21 |
 
 ## Suggested build order
 
@@ -32,6 +33,7 @@ Specs for what comes after Phase 0 (the Wi-Fi test page and Bluetooth ADPCM play
 7. F03 on top of F12: uploads go to the SD card.
 8. F14 on top of F12: call packs on the SD card.
 9. F11 when the Cooboom arrives.
+10. F15 (Eric's choice, 31 Oct 2026): the breadboard probe, then play from the box. Phone-free mode waits until Eric has used the box.
 
 ## Deferred, then resumed
 

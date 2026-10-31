@@ -67,6 +67,7 @@ One 2.4 GHz radio is time-shared between Wi-Fi and BT Classic.
 | `bt` | Scan, connect, remember, auto-reconnect (BluetoothA2DPSource) |
 | `player` | Decode task, ring buffer, volume gain, mono→stereo, stop/loop/queue |
 | `library` | The sound list: built-ins from `sounds/index.json` (in git), then SD packs, then uploads; one id namespace |
+| `ui` | F15, planned: the LCD and the four buttons on the box. Calls the same play, stop, volume and Repeat code as `web` (`TC_HAS_UI`, WROVER only) |
 | `config` | NVS via Preferences |
 
 ## API

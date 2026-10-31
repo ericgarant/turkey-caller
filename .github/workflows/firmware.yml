@@ -28,5 +28,7 @@ jobs:
       # wrover is the main board (F12); wroom keeps the spare board's build working.
       - run: pio run -d firmware -e wrover
       - run: pio run -d firmware -e wroom
+      # The F15 breadboard probe (LCD and buttons) keeps building too
+      - run: pio run -d firmware/tools/ui-probe
       # The LittleFS image builds even without the (non-redistributable) sounds
       - run: pio run -d firmware -e wrover -t buildfs

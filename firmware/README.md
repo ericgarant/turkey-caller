@@ -53,6 +53,7 @@ Probed on Eric's board on 25 Oct 2026 with `tools/sd-probe` (`pio run -d tools/s
 - **SD card: SD_MMC 1-bit mode, CLK GPIO 14, CMD GPIO 15, D0 GPIO 2.** GPIO 4 and 12 are not used (12 is a boot strapping pin). FAT16 or FAT32. Eric's card (960 MB, "APPSD") came with no FAT on it; the probe formatted it (build it with `PLATFORMIO_BUILD_FLAGS="-DPROBE_FORMAT=true"`, which formats only a card that does not mount): FAT32, MBR, 945 MB free. On a Mac: Disk Utility, MS-DOS (FAT), Master Boot Record.
 - GPIO 13 is the slot's DAT3 line. 1-bit mode never drives it, and nothing else should be wired to it.
 - GPIO 16 and 17 belong to the PSRAM.
+- F15 screen and buttons (probed 31 Oct 2026 with `tools/ui-probe`, `pio run -d tools/ui-probe -t upload -t monitor`): LCD1602 I2C at **0x3F** on SDA 21, SCL 22 (VCC on 5V); big buttons to GND on 32 (yellow Up), 33 (blue Down), 25 (green Play) and 26 (red Stop), internal pull-ups. Wire each button on one side of the breadboard groove (pin on the top leg, GND on the bottom leg): the legs facing each other across the groove are always connected. A full LCD rewrite takes 59 ms at 100 kHz.
 - GPIO 2 and 15 are strapping pins. If flashing fails with "Failed to connect" while a card is in, take the card out, flash, and put it back.
 - No card or an unreadable card: the board boots and plays the built-ins; serial says `SD card: none`. Inserting a card needs a restart.
 - Power for the board tests: the Mac's USB port.
