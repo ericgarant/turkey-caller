@@ -336,15 +336,16 @@ void bootButtonLoop(uint32_t now) {
   static bool done = false;
   bool down = digitalRead(kBootPin) == LOW;
   if (!down) {
-    if (downSince && !done) Serial.printf("BOOT released after %u ms: nothing changed (hold 5 s to reset Wi-Fi settings)\n",
-                                          (unsigned)(now - downSince));
+    if (downSince && !done) Serial.printf("BOOT released after %u ms: nothing changed (hold 5 s to %s)\n",
+                                          (unsigned)(now - downSince), radioOff ? "turn Wi-Fi back on" : "reset Wi-Fi settings");
     downSince = 0;
     return;
   }
   if (done || restartReason) return;
   if (!downSince) {
     downSince = now ? now : 1;
-    Serial.println("BOOT pressed: keep holding 5 s to reset the Wi-Fi name, password and device name");
+    Serial.println(radioOff ? "BOOT pressed: keep holding 5 s to turn Wi-Fi back on"
+                            : "BOOT pressed: keep holding 5 s to reset the Wi-Fi name, password and device name");
     return;
   }
   if (now - downSince < kBootHoldMs) return;
