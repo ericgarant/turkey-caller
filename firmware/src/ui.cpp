@@ -176,7 +176,7 @@ void refreshList() {
   else selected[0] = 0;
 }
 
-void select(size_t i) {
+void choose(size_t i) {
   library::Sound s;
   if (i >= listLen || !library::get(list[i], s)) return;
   pos = i;
@@ -269,7 +269,7 @@ void handle(const Event &e, bool playing) {
         snprintf(t, sizeof(t), "Volume %d", (int)constrain(v, 0, 100));
         showNote(t, kNoteMs);
       } else if (listLen) {
-        select(e.button == kUp ? (pos + listLen - 1) % listLen : (pos + 1) % listLen);
+        choose(e.button == kUp ? (pos + listLen - 1) % listLen : (pos + 1) % listLen);
       }
       return;
     case kGreen:
