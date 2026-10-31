@@ -9,6 +9,7 @@ namespace {
 // Sizes include the terminating 0. Limits are in bytes (UTF-8), as the radio and NVS count them.
 constexpr size_t kSsidMax = 32, kPassMin = 8, kPassMax = 63, kNameMax = 24;
 
+bool wifiOffNow = false;
 char ssid[kSsidMax + 1];
 char pass[kPassMax + 1];
 char name[kNameMax + 1];
@@ -49,6 +50,7 @@ void begin() {
   String s = prefs.isKey("ssid") ? prefs.getString("ssid") : String(kDefaultSsid);
   String p = prefs.isKey("pass") ? prefs.getString("pass") : String(kDefaultPass);
   String n = prefs.isKey("name") ? prefs.getString("name") : String(kDefaultName);
+  wifiOffNow = prefs.isKey("wifioff") && prefs.getBool("wifioff");
   prefs.end();
   // A value that no longer passes the rules (should not happen) falls back to its default.
   if (!validate(s, p, n)) {
@@ -111,6 +113,17 @@ void resetDefaults() {
   setDefaults();
   revNow = revNow + 1;
   if (revNow == 0 || revNow > 0x7fffffff) revNow = 1;
+}
+
+bool wifiOff() { return wifiOffNow; }
+
+void setWifiOff(bool off) {
+  Preferences prefs;
+  if (prefs.begin("cfg", false)) {
+    prefs.putBool("wifioff", off);
+    prefs.end();
+  }
+  Serial.printf("settings saved: Wi-Fi %s after restart\n", off ? "off (phone-free)" : "on");
 }
 
 void useDefaultsForThisBoot() {

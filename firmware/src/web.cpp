@@ -43,6 +43,7 @@ volatile uint32_t lastRequestMs = 0;  // last time a request was admitted or fin
 // A settings restart: set by the config handler (AsyncTCP task) or the BOOT button, carried out by loop().
 const char *volatile restartReason = nullptr;  // "settings" or "reset"
 volatile uint32_t restartAskedMs = 0;
+bool radioOff = false;               // phone-free mode (F15): no access point, no server this boot
 
 // Escapes a string for a JSON value (speaker names are user-controlled).
 void jsonStr(String &out, const char *s) {
@@ -524,6 +525,15 @@ void handlePage(AsyncWebServerRequest *req) {
 }  // namespace
 
 void begin() {
+  pinMode(kBootPin, INPUT_PULLUP);
+  if (settings::wifiOff()) {
+    // Phone-free mode (F15): the box's buttons are the only control. BOOT held 5 s still resets the
+    // settings, which turns Wi-Fi back on.
+    radioOff = true;
+    WiFi.mode(WIFI_OFF);
+    Serial.println("Wi-Fi off (phone-free mode): hold red 3 s on the box, or BOOT 5 s, to turn it back on");
+    return;
+  }
   makeEtag();
   // Log phones joining and leaving, with the reason, to diagnose "Connection failed" on a phone.
   WiFi.onEvent([](arduino_event_id_t event, arduino_event_info_t info) {
@@ -540,7 +550,6 @@ void begin() {
                     (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince());
     }
   });
-  pinMode(kBootPin, INPUT_PULLUP);
   WiFi.mode(WIFI_AP);
   bool apOk = WiFi.softAP(settings::apSsid(), settings::apPass(), kApChannel, 0, kMaxClients);
   if (!apOk) {
@@ -631,11 +640,21 @@ void begin() {
                 FW_VERSION);
 }
 
-int clients() { return WiFi.softAPgetStationNum(); }
+int clients() { return radioOff ? 0 : WiFi.softAPgetStationNum(); }
+
+bool wifiOn() { return !radioOff; }
+
+void restart(const char *reason) { askRestart(reason); }
 
 int requestsInFlight() { return inFlight; }
 
 void loop() {
+  if (radioOff) {
+    uint32_t now = millis();
+    bootButtonLoop(now);
+    restartLoop(now);
+    return;
+  }
   dns.processNextRequest();
   // Insurance: no request lasts 10 s (the page is 10 KB, the server times out idle ones), so a
   // count left over after that is a leak; without this the board would answer 503 until reboot.
