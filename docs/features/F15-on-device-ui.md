@@ -12,7 +12,7 @@
 |---|---|---|---|
 | LCD Module 1602, I2C backpack | SDA | 21 | Default I2C pins, as in the Freenove LCD tutorial. 100 kHz, the PCF8574 backpack's rated speed |
 | | SCL | 22 | |
-| | VCC | 5V | As in the Freenove tutorial (the text is too faint at 3.3 V). The contrast screw on the back sets how dark the text is |
+| | VCC | 5V | The **5V** rail, not the 3.3 V one: Eric's module (GJD 1602IIC) has no contrast screw, and at 3.3 V it lights blue with no visible text (31 Oct 2026). Modules with a blue contrast pot can be adjusted with it |
 | | GND | GND | |
 | Big push button, yellow cap | Up | 32 | Between the pin and GND. Internal pull-up, no resistor |
 | Big push button, blue cap | Down | 33 | Same (GPIO 33 was the F13 LED, now free) |
@@ -34,7 +34,7 @@ On the breadboard, before any firmware change. `pio run -d firmware/tools/ui-pro
 - prints each press and hold on serial, with the time it took to rewrite the 32 characters;
 - turns the backlight off after 30 s without a press, and the next press wakes it.
 
-Pass if the address is printed and recorded in `firmware/README.md`, every button shows one press per push (no doubles in 20 quick pushes each), a hold shows as a hold, and the backlight turns off and wakes.
+Pass if the text is readable on the LCD (not only the address on serial), the address is printed and recorded in `firmware/README.md`, every button shows one press per push (no doubles in 20 quick pushes each), a hold shows as a hold, and the backlight turns off and wakes.
 
 ## Screens and controls (step 2)
 
