@@ -33,12 +33,14 @@ These hold for every change. A PR that breaks one needs Eric's OK first, and the
 16. The architect reviews and merges every PR (squash). Nothing is pushed straight to main without Eric's OK.
 17. A firmware PR merges only after Eric's board test of its QA row passes, CI is green for both boards, and its results are in the PR body. Checks the test didn't cover are listed there and carried forward.
 18. Specs live in `docs/features/`; a decision that changes one updates its spec in the same PR.
+19. The box and the page drive the same state through `control` (play, stop, volume, Repeat); neither touches the player or Bluetooth directly for those. The box must work on its own: with Wi-Fi off, with no phone, and the caller must still work with no screen.
 
 ## Decisions
 
 | Area | Choice |
 |---|---|
-| Phone ↔ ESP32 | Wi-Fi softAP + HTTP and WebSocket. Browsers cannot speak ESP-NOW. |
+| Phone ↔ ESP32 | Wi-Fi softAP + HTTP and WebSocket. Browsers cannot speak ESP-NOW. Optional since F15: phone-free mode starts no Wi-Fi |
+| On the box | LCD1602 (I2C, 0x3F, 5 V) and four big buttons from the Freenove kit ([F15](features/F15-on-device-ui.md)); the box and the page share one `control` module |
 | ESP32 ↔ speaker | Bluetooth Classic A2DP, ESP32 as source (ESP32-A2DP) |
 | Web app | Plain HTML/CSS/JS, gzipped and compiled into the firmware (`web/build.py` → `firmware/src/web_page.h`), so `uploadfs` never touches it and a page update never wipes uploaded sounds. No internet needed |
 | Audio | Mono IMA ADPCM WAV, 22.05 kHz (~11 KB/s; the 11 clips are ~0.83 MB), upsampled to 44.1 kHz on the ESP32. Not MP3: on the board, the Helix MP3 decoder's ~30 KB of heap left the Bluetooth stack too little to keep streaming with Wi-Fi up and a phone on the page. ADPCM decoding needs no heap and almost no CPU; turkey calls have little energy above 8 kHz, so the 11 kHz bandwidth loses nothing that matters |

@@ -6,6 +6,20 @@
 
 **Depends on:** F12 (WROVER-E), F14 (the three animals). The spare WROOM board gets no screen.
 
+**Status:** done and board-tested on 31 Oct 2026: probe #35, play from the box #36 (B21), phone-free mode #37 (B22).
+
+## Quick reference (what's on the box's label)
+
+| Button | On the call list | While a call plays |
+|---|---|---|
+| **Yellow** | Previous call | Volume up |
+| **Blue** | Next call | Volume down |
+| **Green** | Play the call shown | Hold 1 s: Repeat on or off |
+| **Red** | Next animal (Turkey, Moose, Deer). Hold 3 s: Wi-Fi off or on (phone-free mode) | Stop |
+| **BOOT** (on the board) | Hold 5 s: with Wi-Fi off, turns it back on (name and password kept). With Wi-Fi on, resets the Wi-Fi name, password and device name to the factory values | Same |
+
+The screen's backlight turns off after 30 s without a press. The first press of any button only wakes it.
+
 ## Hardware (from the Freenove kit)
 
 | Part | Signal | GPIO | Notes |
