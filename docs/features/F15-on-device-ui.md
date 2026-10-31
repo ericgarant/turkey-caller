@@ -10,7 +10,7 @@
 
 | Part | Signal | GPIO | Notes |
 |---|---|---|---|
-| LCD Module 1602, I2C backpack | SDA | 21 | Default I2C pins, as in the Freenove LCD tutorial. 100 kHz |
+| LCD Module 1602, I2C backpack | SDA | 21 | Default I2C pins, as in the Freenove LCD tutorial. 400 kHz in the firmware (see the probe results) |
 | | SCL | 22 | |
 | | VCC | 5V | As in the Freenove tutorial (the text is too faint at 3.3 V). The contrast screw on the back sets how dark the text is |
 | | GND | GND | |
@@ -19,7 +19,8 @@
 | Big push button, green cap | Play | 25 | Same |
 | Big push button, red cap | Stop | 26 | Same. Put it apart from the others on the box, so it's found by feel |
 
-- The backpack's I2C address is 0x27 (PCF8574T chip) or 0x3F (PCF8574AT). The probe finds which one this module has; the firmware tries both at boot.
+- The backpack's I2C address is 0x27 (PCF8574T chip) or 0x3F (PCF8574AT). Eric's module is **0x3F** (probe, 31 Oct 2026); the firmware still tries both at boot.
+- **Button legs:** each button has 4 legs. The two legs facing each other across the breadboard's middle groove are always connected; only the top and bottom legs on the same side are switched. Wire the pin to one and GND to the other, on the same side. Wired across the groove, the pin reads pressed all the time (that was the first probe run).
 - Untouched, per the architecture rules: the SD card pins (2, 14, 15, and 4 and 13), the PSRAM (16, 17), the flash (6 to 11), GPIO 12 and GPIO 0 (the BOOT button, already the 5 s reset).
 - Still free afterwards: 5, 18, 19, 23, 27, and 34 and 35 (input only).
 - The backpack's pull-ups sit on its 5 V supply. This is how the Freenove tutorial wires it, with the ESP32's own I2C pins, and the probe confirms it works on this board.
@@ -77,7 +78,8 @@ Cow moan
 ## Firmware rules
 
 - New module `ui`, built only with `TC_HAS_UI` (set for `wrover`, not for `wroom`, like `TC_HAS_SD`). It calls the same play, stop, volume and Repeat code as `web`; it never touches the player or Bluetooth state directly. The shared Repeat switch moves out of `web.cpp` so both modules set the same one.
-- Buttons: 30 ms debounce, a hold after 1 s. A press is never lost while the screen is being rewritten.
+- Buttons: 30 ms debounce, a hold after 1 s. A press is never lost while the screen is being rewritten: reading the buttons must not wait on the LCD.
+- A full 2-line rewrite took 59 ms at 100 kHz on the probe. The firmware runs I2C at 400 kHz and writes only the characters that changed (the timer is 4 of them), so most updates are a few ms.
 - The screen is written only by the `ui` task, only after a press or a state change (at most every 250 ms while playing for the timer). The task runs at a lower priority than the player's decode task (priority 5 on core 1), so pressing buttons can't cause a dropout.
 - The task's stack is 3 KB or less, from internal RAM. The LCD library is LiquidCrystal_I2C (the one the Freenove tutorial uses), pinned to an exact version.
 - F10 and the 2.25 MB budget still apply: the PR reports `minHeap` and the app size against main.
