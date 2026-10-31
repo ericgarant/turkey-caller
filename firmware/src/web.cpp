@@ -349,6 +349,13 @@ void bootButtonLoop(uint32_t now) {
   }
   if (now - downSince < kBootHoldMs) return;
   done = true;
+  if (radioOff) {
+    // Phone-free mode: BOOT only turns Wi-Fi back on; the Wi-Fi name and password stay.
+    Serial.println("BOOT held 5 s: Wi-Fi back on (phone-free mode ends, Wi-Fi name and password kept)");
+    settings::setWifiOff(false);
+    askRestart("wifi");
+    return;
+  }
   Serial.println("BOOT held 5 s: Wi-Fi name, password and device name reset to the defaults (speaker, volume and sounds kept)");
   settings::resetDefaults();
   askRestart("reset");
@@ -527,8 +534,8 @@ void handlePage(AsyncWebServerRequest *req) {
 void begin() {
   pinMode(kBootPin, INPUT_PULLUP);
   if (settings::wifiOff()) {
-    // Phone-free mode (F15): the box's buttons are the only control. BOOT held 5 s still resets the
-    // settings, which turns Wi-Fi back on.
+    // Phone-free mode (F15): the box's buttons are the only control. BOOT held 5 s turns Wi-Fi back
+    // on (and only that: the Wi-Fi name and password stay).
     radioOff = true;
     WiFi.mode(WIFI_OFF);
     Serial.println("Wi-Fi off (phone-free mode): hold red 3 s on the box, or BOOT 5 s, to turn it back on");

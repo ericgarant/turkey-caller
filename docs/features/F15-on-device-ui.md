@@ -102,7 +102,7 @@ Eric asked for it on 31 Oct 2026, after the box passed B21.
 - **Switch:** on the Picking screen, hold **red 3 s**. The box shows "Wi-Fi off" / "Restarting...", saves the choice and restarts with no access point and no web server. Hold red 3 s again to turn Wi-Fi back on (same restart).
 - **Red on Picking now acts on release:** a short press switches animal, a 1 to 3 s press does nothing, and 3 s switches Wi-Fi. On the Playing screen red still stops at once, on the press, and that push never also switches animal.
 - **The choice lasts across restarts and power cycles.** The boot screen shows "Wi-Fi off" instead of the version while it is on.
-- **Way back without the box:** the BOOT button held 5 s still resets the settings (still watched with Wi-Fi off), which turns Wi-Fi back on.
+- **Way back without the box:** with Wi-Fi off, the BOOT button held 5 s turns Wi-Fi back on and restarts. In this mode it does only that: the Wi-Fi name, password and device name stay (with Wi-Fi on, BOOT 5 s is still the factory reset).
 - Bluetooth, the speaker, volume and Repeat work as before. The page's Instructions explain the mode.
 
 ### Acceptance (QA row B22)
