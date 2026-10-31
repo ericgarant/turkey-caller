@@ -6,6 +6,20 @@
 
 **Depends on:** F12 (WROVER-E), F14 (the three animals). The spare WROOM board gets no screen.
 
+**Status:** done and board-tested on 31 Oct 2026: probe #35, play from the box #36 (B21), phone-free mode #37 (B22).
+
+## Quick reference (what's on the box's label)
+
+| Button | On the call list | While a call plays |
+|---|---|---|
+| **Yellow** | Previous call | Volume up |
+| **Blue** | Next call | Volume down |
+| **Green** | Play the call shown | Hold 1 s: Repeat on or off |
+| **Red** | Next animal (Turkey, Moose, Deer). Hold 3 s: Wi-Fi off or on (phone-free mode) | Stop |
+| **BOOT** (on the board) | Hold 5 s: with Wi-Fi off, turns it back on (name and password kept). With Wi-Fi on, resets the Wi-Fi name, password and device name to the factory values | Same |
+
+The screen's backlight turns off after 30 s without a press. The first press of any button only wakes it.
+
 ## Hardware (from the Freenove kit)
 
 | Part | Signal | GPIO | Notes |
@@ -95,7 +109,24 @@ Cow moan
 6. The backlight turns off after 30 s, and the first press only wakes it.
 7. With the LCD unplugged, the box boots, the phones work, and the fast pass (B1, B2, B4, B5, B9) still passes.
 
+## Phone-free mode (step 3)
+
+Eric asked for it on 31 Oct 2026, after the box passed B21.
+
+- **Switch:** on the Picking screen, hold **red 3 s**. The box shows "Wi-Fi off" / "Restarting...", saves the choice and restarts with no access point and no web server. Hold red 3 s again to turn Wi-Fi back on (same restart).
+- **Red on Picking now acts on release:** a short press switches animal, a 1 to 3 s press does nothing, and 3 s switches Wi-Fi. On the Playing screen red still stops at once, on the press, and that push never also switches animal.
+- **The choice lasts across restarts and power cycles.** The boot screen shows "Wi-Fi off" instead of the version while it is on.
+- **Way back without the box:** with Wi-Fi off, the BOOT button held 5 s turns Wi-Fi back on and restarts. In this mode it does only that: the Wi-Fi name, password and device name stay (with Wi-Fi on, BOOT 5 s is still the factory reset).
+- Bluetooth, the speaker, volume and Repeat work as before. The page's Instructions explain the mode.
+
+### Acceptance (QA row B22)
+
+1. Hold red 3 s on Picking: the board restarts with no `TurkeyCaller` network. Calls play from the box with 0 underruns.
+2. The internal heap with Wi-Fi off is reported against Wi-Fi on (`heap after ...` lines and `low=`).
+3. Power off and on: Wi-Fi stays off. Hold red 3 s: Wi-Fi comes back and the phone joins.
+4. With Wi-Fi off, BOOT held 5 s brings Wi-Fi back.
+5. A short red press on Picking still switches animal, and red during a call stops it without switching animal.
+
 ## Later (not in this spec)
 
-- **Phone-free mode:** Wi-Fi off for the hunt (about 40 KB more internal heap, longer battery, the radio left to Bluetooth), with Stop held at power-on to bring Wi-Fi back. Eric decides after using the box.
 - **No Bluetooth speaker:** the kit's Audio Converter & Amplifier and its small speaker could play calls at short range.

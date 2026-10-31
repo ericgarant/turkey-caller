@@ -22,5 +22,9 @@ const char *validate(const String &ssid, const String &pass, const String &name)
 void save(const String &ssid, const String &pass, const String &name, bool *changed, bool *wifiChanged);
 void resetDefaults();     // the BOOT-button reset: back to the factory values (keeps speaker, volume, sounds)
 void useDefaultsForThisBoot();  // the saved Wi-Fi name was refused by the radio: fall back, keep NVS
+// Phone-free mode (F15): no Wi-Fi at all after the next restart. Switched from the box (hold red 3 s);
+// BOOT held 5 s turns it back on too (in phone-free mode, without the factory reset).
+bool wifiOff();
+void setWifiOff(bool off);  // saved to NVS; takes effect at the next restart
 
 }  // namespace settings

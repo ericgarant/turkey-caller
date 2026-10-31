@@ -17,10 +17,14 @@ The ESP32 runs its own Wi-Fi network, serves the control page from `web/`, and p
 | `src/sdcard.*` | The microSD card (WROVER-E only): mount at boot, free space, "card gone" after a failed read |
 | `src/player.*` | WAV/IMA ADPCM decode task, repeat, resampler to 44.1 kHz, 16 KB ring buffer, volume, A2DP data callback |
 | `src/bt.*` | A2DP source: finds the saved speaker by name, remembers its address, reconnects |
-| `src/web.*` | softAP `TurkeyCaller`, captive DNS, the control page, JSON API, status WebSocket `/ws` |
+| `src/web.*` | softAP `TurkeyCaller`, captive DNS, the control page, JSON API, status WebSocket `/ws`. Starts no Wi-Fi in phone-free mode |
+| `src/control.*` | The actions the page and the box share: play, stop, volume, the Repeat switch (F15) |
+| `src/ui.*` | The box: LCD1602 and four buttons, the call list and playing screens, phone-free switch (F15, WROVER only) |
+| `src/settings.*` | Wi-Fi name, password, device name and phone-free mode, in NVS |
 | `scripts/prebuild.py` | Before each build: runs `../web/build.py` (page → `src/web_page.h`, fails over 20 KB) and writes `src/version.h` from `git describe` |
 | `scripts/check_size.py` | Fails the build if the app binary is over 2.25 MB (90% of the app partition) |
 | `tools/sd-probe/` | One-off probe for a new board: chip revision, flash and PSRAM size, whether the card answers and mounts |
+| `tools/ui-probe/` | One-off probe for the screen and buttons: LCD address, each press and hold, backlight |
 | `partitions.csv` | 2.5 MB app, 1.375 MB LittleFS (`data/`, partition labeled `spiffs` so defaults work), 64 KB coredump. No OTA |
 
 ## Flash it (Mac)
@@ -53,10 +57,43 @@ Probed on Eric's board on 25 Oct 2026 with `tools/sd-probe` (`pio run -d tools/s
 - **SD card: SD_MMC 1-bit mode, CLK GPIO 14, CMD GPIO 15, D0 GPIO 2.** GPIO 4 and 12 are not used (12 is a boot strapping pin). FAT16 or FAT32. Eric's card (960 MB, "APPSD") came with no FAT on it; the probe formatted it (build it with `PLATFORMIO_BUILD_FLAGS="-DPROBE_FORMAT=true"`, which formats only a card that does not mount): FAT32, MBR, 945 MB free. On a Mac: Disk Utility, MS-DOS (FAT), Master Boot Record.
 - GPIO 13 is the slot's DAT3 line. 1-bit mode never drives it, and nothing else should be wired to it.
 - GPIO 16 and 17 belong to the PSRAM.
-- F15 screen and buttons (probed 31 Oct 2026 with `tools/ui-probe`, `pio run -d tools/ui-probe -t upload -t monitor`): LCD1602 I2C at **0x3F** on SDA 21, SCL 22 (VCC on the 5V rail: on 3.3 V it lights but shows no text); big buttons to GND on 32 (yellow Up), 33 (blue Down), 25 (green Play) and 26 (red Stop), internal pull-ups. Wire each button on one side of the breadboard groove (pin on the top leg, GND on the bottom leg): the legs facing each other across the groove are always connected. A full LCD rewrite takes 59 ms at 100 kHz.
+- The screen and buttons (F15) use GPIO 21, 22, 25, 26, 32 and 33: see the next section.
 - GPIO 2 and 15 are strapping pins. If flashing fails with "Failed to connect" while a card is in, take the card out, flash, and put it back.
 - No card or an unreadable card: the board boots and plays the built-ins; serial says `SD card: none`. Inserting a card needs a restart.
 - Power for the board tests: the Mac's USB port.
+
+## The box: screen and buttons (F15)
+
+All parts are from the Freenove kit. Probed on 31 Oct 2026 with `tools/ui-probe` (`pio run -d tools/ui-probe -t upload -t monitor`) and board-tested (B21, B22).
+
+| Part | Pin | Wire to |
+|---|---|---|
+| LCD1602 with I2C backpack (GJD 1602IIC, address **0x3F**) | SDA | GPIO 21 |
+| | SCL | GPIO 22 |
+| | VCC | the **5V** rail, not 3.3 V |
+| | GND | GND |
+| Yellow button (Up) | one leg / the other | GPIO 32 / GND |
+| Blue button (Down) | | GPIO 33 / GND |
+| Green button (Play) | | GPIO 25 / GND |
+| Red button (Stop) | | GPIO 26 / GND |
+
+- **Screen power:** on 3.3 V the screen lights blue but shows no text. Eric's module has no contrast screw; its contrast is fixed for 5 V.
+- **Button legs:** each button has 4 legs. The two legs facing each other across the breadboard's middle groove are always connected. Put the GPIO wire and the GND wire on the **same side** of the groove (top leg and bottom leg). Wired across the groove, the button reads pressed all the time, and serial says `the ... button reads pressed at boot` (a button held at boot logs the same, harmlessly).
+- No resistors: the firmware turns on the internal pull-ups.
+- With no screen connected, serial says `LCD: none` and the caller works as before.
+- A full rewrite of the LCD takes about 60 ms at 100 kHz, so the firmware only writes characters that changed, and reads the buttons on their own 5 ms timer.
+
+| Button | On the call list | While a call plays |
+|---|---|---|
+| **Yellow** | Previous call | Volume up |
+| **Blue** | Next call | Volume down |
+| **Green** | Play the call shown | Hold 1 s: Repeat on or off |
+| **Red** | Next animal (Turkey, Moose, Deer). Hold 3 s: Wi-Fi off or on (phone-free mode) | Stop |
+| **BOOT** (on the board) | Hold 5 s: with Wi-Fi off, turns it back on (name and password kept). With Wi-Fi on, resets the Wi-Fi name, password and device name to the factory values | Same |
+
+The screen's backlight turns off after 30 s without a press. The first press of any button only wakes it.
+
+**Phone-free mode:** hold red 3 s on the call list. The box shows "Wi-Fi off / Restarting...", restarts with no Wi-Fi network, and the boot screen says "Wi-Fi off". Internal heap goes from about 77 KB to 135 KB. The choice survives power cycles. Hold red 3 s again, or BOOT 5 s, to turn Wi-Fi back on.
 
 ## Connect the speaker and test
 
@@ -85,4 +122,4 @@ The contract is in `../web/README.md`. POST bodies are form fields; replies are 
 
 `src/settings.*` keeps the Wi-Fi name, password and device name in NVS (namespace `cfg`). The page's **Settings** screen changes them through `/api/config`. A device-name change applies at once on every phone (the Bluetooth name follows at the next restart); a Wi-Fi name or password change makes the board send `{"evt":"restart"}` to every page and restart about 1 s later. The password never leaves the board: not in replies, WebSocket messages or the serial log.
 
-**Forgot the password?** With the board running, hold the **BOOT** button for 5 s. Serial prints `BOOT held 5 s: …`, the Wi-Fi name, password and device name go back to `TurkeyCaller` / `gobble123` / `Turkey Caller`, and the board restarts. The speaker, volume and sounds are kept. Holding BOOT while plugging in or pressing EN starts the chip's download mode instead, which is not this.
+**Forgot the password?** With the board running and Wi-Fi on, hold the **BOOT** button for 5 s. Serial prints `BOOT held 5 s: …`, the Wi-Fi name, password and device name go back to `TurkeyCaller` / `gobble123` / `Turkey Caller`, and the board restarts. The speaker, volume and sounds are kept. Holding BOOT while plugging in or pressing EN starts the chip's download mode instead, which is not this. In phone-free mode, BOOT held 5 s only turns Wi-Fi back on and keeps the name and password (`BOOT held 5 s: Wi-Fi back on`).

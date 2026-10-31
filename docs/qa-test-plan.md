@@ -44,6 +44,8 @@ Fast pass (about 10 minutes): B1, B2, B4, B5, B9. Full pass before any release.
 | B15 | Phase 2 | Page update keeps sounds | Flash a new firmware build with `pio run -t upload` (not `uploadfs`) | All sounds are still there |
 | B16 | Yes, via the command | Soak (Phase 4) | Run `TAPS=360 GAP_MS=20000 node web/test/stress.mjs http://192.168.4.1` (a call every 20 s for 2 hours, in order, at normal volume) | Script prints PASS; no audible dropout; speaker stays connected |
 
+Rows B18 and up are in their feature specs: B18 [F12](features/F12-wrover-sd.md), B20 [F14](features/F14-call-packs.md), B21 and B22 [F15](features/F15-on-device-ui.md) (screen and buttons, phone-free mode). B19 (F13) was dropped. With the box's screen and buttons, B4 and B5 can also be run from the buttons.
+
 ## What to record each run
 
 Firmware version, speaker, B-numbers passed and failed, and from `/api/status` after B9 and B16: `minHeap`, `underruns`, `uptime`. Paste the serial log around any failure. A failure becomes a GitHub issue labelled `qa` with the steps and the log.

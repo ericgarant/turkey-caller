@@ -12,7 +12,9 @@
 #include "heapmon.h"
 #include "library.h"
 #include "player.h"
+#include "settings.h"
 #include "version.h"
+#include "web.h"
 
 namespace ui {
 namespace {
@@ -24,6 +26,8 @@ constexpr uint8_t kLcdAddrs[] = {0x27, 0x3F};  // PCF8574T, PCF8574AT (Eric's mo
 constexpr uint32_t kPollUs = 5000;     // button sampling period
 constexpr uint8_t kDebounceSamples = 6;  // 30 ms
 constexpr uint32_t kHoldMs = 1000;
+constexpr uint32_t kLongHoldMs = 3000;  // red: Wi-Fi off or on (phone-free mode)
+constexpr uint32_t kRestartMs = 1500;   // "Wi-Fi off" stays up this long before the restart
 constexpr uint32_t kBacklightMs = 30000;
 constexpr uint32_t kBootMs = 2000;     // "Turkey caller" and the version
 constexpr uint32_t kNoteMs = 1500;     // "Volume 60", "Repeat on"
@@ -37,7 +41,7 @@ enum Button : uint8_t { kUp, kDown, kGreen, kRed, kButtons };
 constexpr uint8_t kPins[kButtons] = {32, 33, 25, 26};
 const char *const kButtonNames[kButtons] = {"yellow (up)", "blue (down)", "green (play)", "red (stop)"};
 
-enum Kind : uint8_t { kPress, kHeld, kRelease, kReleaseAfterHold };
+enum Kind : uint8_t { kPress, kHeld, kLongHeld, kRelease, kReleaseAfterHold };
 struct Event {
   uint8_t button, kind;
 };
@@ -48,6 +52,7 @@ QueueHandle_t events;
 struct Debounce {
   bool down;
   bool held;
+  bool longHeld;
   uint8_t count;    // samples in a row that differ from `down`
   uint32_t downAt;
 };
@@ -69,6 +74,10 @@ void sample(void *) {
         d.held = true;
         post(b, kHeld);
       }
+      if (d.down && d.held && !d.longHeld && now - d.downAt >= kLongHoldMs) {
+        d.longHeld = true;
+        post(b, kLongHeld);
+      }
       continue;
     }
     if (++d.count < kDebounceSamples) continue;
@@ -77,6 +86,7 @@ void sample(void *) {
     if (raw) {
       d.downAt = now;
       d.held = false;
+      d.longHeld = false;
       post(b, kPress);
     } else {
       post(b, d.held ? kReleaseAfterHold : kRelease);
@@ -217,11 +227,23 @@ bool swallow[kButtons] = {};    // this push only woke the backlight
 bool waking = false;            // a play from the box is waiting for the speaker
 uint32_t wakingSince = 0;
 uint32_t checkErrorAt = 0;      // after a play from the box: did the player refuse it?
+uint32_t restartAt = 0;         // phone-free mode switched: restart then (0 = no)
+const char *restartText = nullptr;  // line 1 until the restart
 char lastCurrent[32] = "";
 
 void showNote(const char *text, uint32_t ms) {
   strlcpy(note, text, sizeof(note));
   noteUntil = millis() + ms;
+}
+
+// Phone-free mode (F15): red held 3 s on the call list switches Wi-Fi off or on, then restarts.
+void toggleWifi() {
+  if (restartAt) return;
+  bool off = !settings::wifiOff();
+  control::stop();
+  settings::setWifiOff(off);
+  restartText = off ? "Wi-Fi off" : "Wi-Fi on";
+  restartAt = millis() + kRestartMs;
 }
 
 void play() {
@@ -282,12 +304,15 @@ void handle(const Event &e, bool playing) {
       }
       return;
     case kRed:
-      if (e.kind != kPress) return;
       if (busy) {
-        control::stop();
+        if (e.kind != kPress) return;
+        control::stop();  // at once, on the press
         waking = false;
-      } else {
-        nextAnimal();
+        swallow[kRed] = true;  // its release must not also switch animal
+      } else if (e.kind == kRelease) {
+        nextAnimal();  // a short press; a longer one does nothing until 3 s
+      } else if (e.kind == kLongHeld) {
+        toggleWifi();
       }
       return;
   }
@@ -323,7 +348,7 @@ void render(const player::Stats &p) {
   uint32_t now = millis();
   char l1[17], l2[17];
   if ((int32_t)(bootUntil - now) > 0) {
-    draw("Turkey caller", FW_VERSION);
+    draw("Turkey caller", settings::wifiOff() ? "Wi-Fi off" : FW_VERSION);
     return;
   }
   library::Sound s;
@@ -380,6 +405,14 @@ void task(void *) {
         showNote("No speaker", kErrorMs);
       }
     }
+    if (restartAt) {
+      draw(restartText, "Restarting...");
+      if ((int32_t)(now - restartAt) >= 0) {
+        restartAt = 0;
+        web::restart("wifi");  // the main loop tells any phone, then restarts about 1 s later
+      }
+      continue;
+    }
     if (checkErrorAt && (int32_t)(now - checkErrorAt) >= 0) {
       checkErrorAt = 0;
       String err = player::error();
@@ -407,6 +440,7 @@ void begin() {
     // stays "down" and never acts until it is released.
     deb[b].down = digitalRead(kPins[b]) == LOW;
     deb[b].held = true;
+    deb[b].longHeld = true;
     if (deb[b].down) Serial.printf("ui: the %s button reads pressed at boot: check its wiring\n", kButtonNames[b]);
   }
 

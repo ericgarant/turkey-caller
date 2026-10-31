@@ -43,6 +43,7 @@ volatile uint32_t lastRequestMs = 0;  // last time a request was admitted or fin
 // A settings restart: set by the config handler (AsyncTCP task) or the BOOT button, carried out by loop().
 const char *volatile restartReason = nullptr;  // "settings" or "reset"
 volatile uint32_t restartAskedMs = 0;
+bool radioOff = false;               // phone-free mode (F15): no access point, no server this boot
 
 // Escapes a string for a JSON value (speaker names are user-controlled).
 void jsonStr(String &out, const char *s) {
@@ -335,19 +336,27 @@ void bootButtonLoop(uint32_t now) {
   static bool done = false;
   bool down = digitalRead(kBootPin) == LOW;
   if (!down) {
-    if (downSince && !done) Serial.printf("BOOT released after %u ms: nothing changed (hold 5 s to reset Wi-Fi settings)\n",
-                                          (unsigned)(now - downSince));
+    if (downSince && !done) Serial.printf("BOOT released after %u ms: nothing changed (hold 5 s to %s)\n",
+                                          (unsigned)(now - downSince), radioOff ? "turn Wi-Fi back on" : "reset Wi-Fi settings");
     downSince = 0;
     return;
   }
   if (done || restartReason) return;
   if (!downSince) {
     downSince = now ? now : 1;
-    Serial.println("BOOT pressed: keep holding 5 s to reset the Wi-Fi name, password and device name");
+    Serial.println(radioOff ? "BOOT pressed: keep holding 5 s to turn Wi-Fi back on"
+                            : "BOOT pressed: keep holding 5 s to reset the Wi-Fi name, password and device name");
     return;
   }
   if (now - downSince < kBootHoldMs) return;
   done = true;
+  if (radioOff) {
+    // Phone-free mode: BOOT only turns Wi-Fi back on; the Wi-Fi name and password stay.
+    Serial.println("BOOT held 5 s: Wi-Fi back on (phone-free mode ends, Wi-Fi name and password kept)");
+    settings::setWifiOff(false);
+    askRestart("wifi");
+    return;
+  }
   Serial.println("BOOT held 5 s: Wi-Fi name, password and device name reset to the defaults (speaker, volume and sounds kept)");
   settings::resetDefaults();
   askRestart("reset");
@@ -524,6 +533,15 @@ void handlePage(AsyncWebServerRequest *req) {
 }  // namespace
 
 void begin() {
+  pinMode(kBootPin, INPUT_PULLUP);
+  if (settings::wifiOff()) {
+    // Phone-free mode (F15): the box's buttons are the only control. BOOT held 5 s turns Wi-Fi back
+    // on (and only that: the Wi-Fi name and password stay).
+    radioOff = true;
+    WiFi.mode(WIFI_OFF);
+    Serial.println("Wi-Fi off (phone-free mode): hold red 3 s on the box, or BOOT 5 s, to turn it back on");
+    return;
+  }
   makeEtag();
   // Log phones joining and leaving, with the reason, to diagnose "Connection failed" on a phone.
   WiFi.onEvent([](arduino_event_id_t event, arduino_event_info_t info) {
@@ -540,7 +558,6 @@ void begin() {
                     (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince());
     }
   });
-  pinMode(kBootPin, INPUT_PULLUP);
   WiFi.mode(WIFI_AP);
   bool apOk = WiFi.softAP(settings::apSsid(), settings::apPass(), kApChannel, 0, kMaxClients);
   if (!apOk) {
@@ -631,11 +648,21 @@ void begin() {
                 FW_VERSION);
 }
 
-int clients() { return WiFi.softAPgetStationNum(); }
+int clients() { return radioOff ? 0 : WiFi.softAPgetStationNum(); }
+
+bool wifiOn() { return !radioOff; }
+
+void restart(const char *reason) { askRestart(reason); }
 
 int requestsInFlight() { return inFlight; }
 
 void loop() {
+  if (radioOff) {
+    uint32_t now = millis();
+    bootButtonLoop(now);
+    restartLoop(now);
+    return;
+  }
   dns.processNextRequest();
   // Insurance: no request lasts 10 s (the page is 10 KB, the server times out idle ones), so a
   // count left over after that is a leak; without this the board would answer 503 until reboot.
