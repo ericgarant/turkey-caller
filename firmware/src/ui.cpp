@@ -435,7 +435,7 @@ void begin() {
   lastInput = now;
   events = xQueueCreate(16, sizeof(Event));
   // Below the player's decode task (priority 5 on core 1), so the box can't cause a dropout.
-  xTaskCreatePinnedToCore(task, "ui", 3072, nullptr, 2, nullptr, 1);
+  xTaskCreatePinnedToCore(task, "ui", 4096, nullptr, 2, nullptr, 1);
   esp_timer_create_args_t args = {};
   args.callback = sample;
   args.name = "buttons";

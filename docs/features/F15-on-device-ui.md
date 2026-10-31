@@ -81,7 +81,7 @@ Cow moan
 - Buttons: 30 ms debounce, a hold after 1 s. A press is never lost while the screen is being rewritten: reading the buttons must not wait on the LCD.
 - A full 2-line rewrite took 59 ms at 100 kHz on the probe. The firmware stays at 100 kHz (the PCF8574 is rated for it) and writes only the characters that changed (a timer tick is one or two), so most updates take a few ms. The buttons are sampled by a 5 ms timer, apart from the screen.
 - The screen is written only by the `ui` task, only after a press or a state change (at most every 250 ms while playing for the timer). The task runs at a lower priority than the player's decode task (priority 5 on core 1), so pressing buttons can't cause a dropout.
-- The task's stack is 3 KB or less, from internal RAM. The LCD library is LiquidCrystal_I2C (the one the Freenove tutorial uses), pinned to an exact version.
+- The task's stack is 4 KB (3 KB left only 1.2 KB free while idle on the board), from internal RAM. The LCD library is LiquidCrystal_I2C (the one the Freenove tutorial uses), pinned to an exact version.
 - F10 and the 2.25 MB budget still apply: the PR reports `minHeap` and the app size against main.
 - No change to the API, the mock or the page, except that a call started from the box appears on the page like one started from another phone.
 
