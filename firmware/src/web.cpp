@@ -6,6 +6,7 @@
 #include <WiFi.h>
 
 #include "bt.h"
+#include "control.h"
 #include "heapmon.h"
 #include "library.h"
 #include "player.h"
@@ -37,7 +38,6 @@ DNSServer dns;
 
 char etag[12] = "";                 // hash of the built-in page, sent as ETag so phones revalidate after a reflash
 volatile bool pushNow = false;       // something changed: push status on the next loop()
-volatile bool repeatOn = false;      // the Repeat switch, shared by every page (off after a restart)
 volatile int inFlight = 0;           // HTTP requests being served (AsyncTCP task; reset by loop())
 volatile uint32_t lastRequestMs = 0;  // last time a request was admitted or finished (watchdog for a stuck inFlight)
 // A settings restart: set by the config handler (AsyncTCP task) or the BOOT button, carried out by loop().
@@ -126,7 +126,7 @@ String statusJson() {
   j += ",\"loop\":";
   j += p.playing && p.loop ? "true" : "false";
   j += ",\"repeat\":";
-  j += repeatOn ? "true" : "false";
+  j += control::repeat() ? "true" : "false";
   j += ",\"pos_ms\":" + String(p.posMs);
   j += ",\"len_ms\":" + String(p.lenMs);
   j += ",\"volume\":" + String(p.volume);
@@ -185,9 +185,10 @@ void handlePlay(AsyncWebServerRequest *req) {
   String id = param(req, "id");
   if (!library::has(id.c_str())) return sendError(req, 400, "unknown sound");
   String loopParam = param(req, "loop");
-  bool loop = loopParam.isEmpty() ? (bool)repeatOn : truthy(loopParam);
+  bool loop = loopParam.isEmpty() ? control::repeat() : truthy(loopParam);
   // Never waits (F07): 200 playing now, 202 waking the speaker first, 409 no speaker.
-  switch (bt::requestPlay(id.c_str(), loop)) {
+  // A play with loop= also sets the shared Repeat switch.
+  switch (control::play(id.c_str(), loop)) {
     case bt::kNoSpeaker:
       Serial.println("tap refused: no speaker saved");
       return sendError(req, 409, "No speaker connected");
@@ -195,24 +196,20 @@ void handlePlay(AsyncWebServerRequest *req) {
       Serial.println("tap refused: searching for speakers");
       return sendError(req, 409, "Searching for speakers, try again after the search");
     case bt::kWaking:
-      repeatOn = loop;
       pushNow = true;
       Serial.printf("tap %s%s: waking the speaker\n", id.c_str(), loop ? " (repeat)" : "");
       return req->send(202, "application/json", "{\"ok\":true,\"waking\":true}");
     case bt::kPlaying:
       break;
   }
-  repeatOn = loop;  // a play with loop= also sets the shared switch
   Serial.printf("tap %s%s\n", id.c_str(), loop ? " (repeat)" : "");
   sendOk(req);
 }
 
-void setVolume(long level) { player::setVolume((uint8_t)constrain(level, 0, 100)); }
-
 void handleVolume(AsyncWebServerRequest *req) {
   String level = param(req, "level");
   if (level.isEmpty()) return sendError(req, 400, "missing level");
-  setVolume(level.toInt());
+  control::setVolume(level.toInt());
   sendOk(req);
 }
 
@@ -396,25 +393,19 @@ void handleDelete(AsyncWebServerRequest *req) {
 
 // Commands from the page: {"cmd":"volume","level":N}, also {"cmd":"stop"}.
 void setRepeat(bool on) {
-  repeatOn = on;
-  player::setLoop(on);
-  Serial.printf("repeat %s heap=%u low=%u\n", on ? "on" : "off", (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince());
+  control::setRepeat(on);
   pushNow = true;
 }
-
-void logStop() { Serial.printf("stop heap=%u low=%u\n", (unsigned)ESP.getFreeHeap(), (unsigned)heapmon::lowSince()); }
 
 void onCommand(const char *msg) {
   if (strstr(msg, "\"cmd\":\"volume\"")) {
     const char *l = strstr(msg, "\"level\":");
     if (l) {
-      setVolume(atol(l + 8));
+      control::setVolume(atol(l + 8));
       pushNow = true;
     }
   } else if (strstr(msg, "\"cmd\":\"stop\"")) {
-    logStop();
-    bt::cancelWake();
-    player::stop();
+    control::stop();
     pushNow = true;
   } else if (strstr(msg, "\"cmd\":\"repeat\"")) {
     const char *o = strstr(msg, "\"on\":");
@@ -472,7 +463,7 @@ Shown shownNow() {
   s.playing = p.playing;
   s.loop = p.loop;
   s.volume = p.volume;
-  s.repeat = repeatOn;
+  s.repeat = control::repeat();
   s.clients = WiFi.softAPgetStationNum();
   s.speakerLen = bt::speakerName().length();
   s.cfg = settings::rev();
@@ -603,9 +594,7 @@ void begin() {
   server.on("/api/config", HTTP_POST, handleConfigPost);
   server.on("/api/play", HTTP_POST, handlePlay);
   server.on("/api/stop", HTTP_POST, [](AsyncWebServerRequest *req) {
-    logStop();
-    bt::cancelWake();
-    player::stop();
+    control::stop();
     sendOk(req);
   });
   server.on("/api/volume", HTTP_POST, handleVolume);
