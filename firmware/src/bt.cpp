@@ -294,6 +294,7 @@ void wakeLoop(uint32_t now) {
   if (ready) {
     wakeAskedMs = 0;
     tapMs = millis() | 1;  // share the radio for the call
+    lastAudioMs = now;     // or the idle check below pauses the stream again before the call starts
     Serial.printf("speaker awake after %u ms, playing %s\n", (unsigned)(now - p.sinceMs), p.id);
     player::play(p.id, p.loop, kPreRollMs);
     return;
@@ -475,8 +476,8 @@ void loop() {
 
   // No keep-alive (F07): after a long idle, pause the stream so the speaker's own power saving
   // works. The next tap wakes it.
-  if (a2dp.is_connected() && audioStarted && !suspendedByUs && now - lastAudioMs > kIdleSuspendMs &&
-      now - connectedMs > kIdleSuspendMs) {
+  if (a2dp.is_connected() && audioStarted && !suspendedByUs && !pending.active && !player::stats().playing &&
+      now - lastAudioMs > kIdleSuspendMs && now - connectedMs > kIdleSuspendMs) {
     suspendedByUs = true;
     esp_err_t err = esp_a2d_media_ctrl(ESP_A2D_MEDIA_CTRL_SUSPEND);
     Serial.printf("idle %u min: pausing the speaker's stream: %s\n", (unsigned)(kIdleSuspendMs / 60000),
