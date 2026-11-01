@@ -9,7 +9,7 @@ These hold for every change. A PR that breaks one needs Eric's OK first, and the
 **Hardware**
 1. The main board is the Freenove ESP32-WROVER-E with the microSD card. The WROOM-32E is the spare; it runs the `wroom-final` branch, and `pio run -e wroom` must keep building in CI.
 2. Only an original ESP32 (not S2, S3, C3 or C6): the speaker needs Bluetooth Classic A2DP, which only the original ESP32 has.
-3. SD card in SD_MMC 1-bit mode on CLK 14, CMD 15, D0 2. Firmware never drives GPIO 12 (boot strap) or 13 (the slot's DAT3). The card is mounted once at boot; a failed read marks it gone until restart and never resets the board.
+3. SD card in SD_MMC 1-bit mode on CLK 14, CMD 15, D0 2. Firmware never drives GPIO 12 (boot strap) or 13 (the slot's DAT3). The card is mounted at boot (3 tries). A failed read remounts it once and carries on; if that fails the card is marked gone until a later tap remounts it. It never resets the board.
 4. Keep it simple. A feature that adds hardware or a moving part needs a clear field need (the motion sensor and LED, F13, were dropped for this reason).
 
 **Memory**

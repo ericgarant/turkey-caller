@@ -21,6 +21,9 @@ Result finish(const void *owner);
 // Drops an upload that stopped sending (the phone left Wi-Fi). From web::loop().
 void loop();
 bool active();
+// Remounts the SD card after a read error (sdcard::remount), holding off uploads and deletes
+// meanwhile. Refuses while an upload is open. From the player's task.
+bool remountCard();
 
 // Deletes an upload ("mine") from the card. Built-in and pack calls can't be deleted.
 Result remove(const char *id);
