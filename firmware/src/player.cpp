@@ -10,6 +10,7 @@
 
 #include "library.h"
 #include "sdcard.h"
+#include "uploads.h"
 #include "wav.h"
 
 namespace player {
@@ -87,6 +88,7 @@ Ring ring;
 QueueHandle_t commands = nullptr;  // length 1, overwritten: the latest tap wins
 File file;
 bool fromCard = false;             // decode task only: the open clip is on the SD card
+char openPath[56] = "";            // decode task only: path of the open clip, to reopen after a remount
 char lastError[40] = "";           // "SD card removed", shown by the page once; under `lock`
 
 portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
@@ -221,6 +223,31 @@ void decodeAdpcmBlock(const uint8_t *b, size_t len) {
 
 uint16_t rd16(const uint8_t *p) { return p[0] | (p[1] << 8); }
 
+void reportCardGone() {
+  sdcard::markGone();
+  portENTER_CRITICAL(&lock);
+  strlcpy(lastError, "SD card removed", sizeof(lastError));
+  portEXIT_CRITICAL(&lock);
+}
+
+// A card read failed. Before calling the card removed, remount it once: a single glitch (a dip
+// on a battery pack, a card that stopped answering) otherwise needed a restart. Never while an
+// upload is writing to the card. Returns true when the card is back.
+bool tryRemount() {
+  Serial.println("SD card: read failed, remounting");
+  return uploads::remountCard();
+}
+
+// Reopens the clip on the card at byte `pos` after a remount, with the same small buffer.
+bool reopenAt(uint32_t pos) {
+  fs::FS *fs = sdcard::fs();
+  if (!fs) return false;
+  file = fs->open(openPath, "r");
+  if (!file) return false;
+  file.setBufferSize(128);
+  return file.seek(pos);
+}
+
 // Reads the WAV header up to the data chunk. Returns false (and logs) on a file we can't play.
 bool openWav(const char *path) {
   clip = Clip();
@@ -245,15 +272,18 @@ bool decodeSome() {
   }
   size_t want = clip.info.adpcm ? clip.info.blockAlign : kReadChunk;
   if (want > clip.dataLeft) want = clip.dataLeft;
+  uint32_t pos = fromCard ? file.position() : 0;
   size_t n = file.read(buf, want);
   if (n < want && fromCard) {
-    // Short read with data still to come: the card was pulled or failed (F12). Stop the call
-    // now, mark the card gone so nothing retries it, and tell the page.
-    sdcard::markGone();
-    portENTER_CRITICAL(&lock);
-    strlcpy(lastError, "SD card removed", sizeof(lastError));
-    portEXIT_CRITICAL(&lock);
-    return false;
+    // Short read with data still to come: the card failed or was pulled (F12). Remount once and
+    // carry on from the same spot; if the card doesn't come back, stop the call and tell the page.
+    file.close();
+    if (tryRemount() && reopenAt(pos)) n = file.read(buf, want);
+    if (n < want) {
+      if (file) file.close();
+      reportCardGone();
+      return false;
+    }
   }
   if (n == 0) return false;
   clip.dataLeft -= n;
@@ -288,7 +318,10 @@ void startClip(const char *id, bool loop, uint32_t preRollMs) {
   char path[56];
   library::path(snd, path, sizeof(path));  // flash, a pack or an upload (F14)
   fromCard = snd.card;
+  strlcpy(openPath, path, sizeof(openPath));
   fs::FS *fs = fromCard ? sdcard::fs() : &LittleFS;
+  // The card is marked gone after an earlier failure: a tap tries it again.
+  if (!fs && fromCard && tryRemount()) fs = sdcard::fs();
   if (!fs) {
     Serial.printf("can't play %s: no SD card\n", id);
     portENTER_CRITICAL(&lock);
@@ -297,14 +330,10 @@ void startClip(const char *id, bool loop, uint32_t preRollMs) {
     return;
   }
   file = fs->open(path, "r");
+  if (!file && fromCard && tryRemount() && (fs = sdcard::fs())) file = fs->open(path, "r");
   if (!file) {
     // Opening a card file that was there at boot fails once the card is gone.
-    if (fromCard) {
-      sdcard::markGone();
-      portENTER_CRITICAL(&lock);
-      strlcpy(lastError, "SD card removed", sizeof(lastError));
-      portEXIT_CRITICAL(&lock);
-    }
+    if (fromCard) reportCardGone();
     Serial.printf("can't open %s\n", path);
     return;
   }

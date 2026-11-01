@@ -76,6 +76,12 @@ bool active() {
   return busy;
 }
 
+bool remountCard() {
+  Lock l;  // no upload or delete can touch the card while it is unmounted
+  if (busy) return false;
+  return sdcard::remount();
+}
+
 Result start(const void *who, const char *filename, size_t contentLength) {
   Lock l;
   if (busy && millis() - lastDataMs < kIdleMs) return {409, "another upload is running"};
