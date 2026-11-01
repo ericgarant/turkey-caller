@@ -78,29 +78,45 @@ void parseIndex(const char *p, Fn fn) {
 // Reads a whole index file (at most kMaxIndexBytes) and parses it.
 template <typename Fn>
 void readIndex(fs::FS &fs, const char *file, Fn fn) {
+  // Every way of ending up with no sounds is logged: a pack that silently lists 0 sounds is
+  // how a failing card first shows.
   File idx = fs.open(file, "r");
-  if (!idx) return;
-  if (idx.size() >= kMaxIndexBytes) {
+  if (!idx) {
+    Serial.printf("%s: can't open\n", file);
+    return;
+  }
+  size_t size = idx.size();
+  if (size >= kMaxIndexBytes) {
     Serial.printf("%s too big, ignored\n", file);
     idx.close();
     return;
   }
-  char *text = (char *)malloc(idx.size() + 1);
-  if (text) {
-    size_t len = idx.read((uint8_t *)text, idx.size());
-    text[len] = 0;
+  char *text = (char *)malloc(size + 1);
+  if (!text) {
+    Serial.printf("%s: out of memory\n", file);
     idx.close();
-    parseIndex(text, fn);
-    free(text);
-  } else {
-    idx.close();
+    return;
   }
+  size_t len = idx.read((uint8_t *)text, size);
+  text[len] = 0;
+  idx.close();
+  if (len < size) Serial.printf("%s: read %u of %u bytes (card read error?)\n", file, (unsigned)len, (unsigned)size);
+  size_t entries = 0;
+  parseIndex(text, [&](const Entry &e) {
+    entries++;
+    fn(e);
+  });
+  free(text);
+  if (!entries) Serial.printf("%s: no entries (%u bytes, empty or not valid JSON)\n", file, (unsigned)len);
 }
 
 // Reads a clip's header. Returns false (and logs) for a file that can't be played.
 bool probe(fs::FS &fs, const char *file, Sound &s) {
   File f = fs.open(file, "r");
-  if (!f) return false;
+  if (!f) {
+    Serial.printf("sound %s skipped: can't open\n", file);
+    return false;
+  }
   wav::Info info;
   const char *why = "";
   bool ok = wav::read(f, info, &why);
@@ -181,7 +197,11 @@ void begin() {
   };
   // Adds one sound from an index entry (built-in or pack). `where` is for the log.
   auto addEntry = [&](fs::FS &fs, const Entry &e, const char *pack, const char *where) {
-    if (count >= kMaxSounds || !validId(e.id)) return;
+    if (count >= kMaxSounds) return;
+    if (!validId(e.id)) {
+      Serial.printf("%s: id \"%s\" skipped: must be a-z, 0-9 and _ (24 at most)\n", where, e.id);
+      return;
+    }
     if (listed(e.id)) {
       Serial.printf("%s: %s skipped, id already used\n", where, e.id);
       return;
