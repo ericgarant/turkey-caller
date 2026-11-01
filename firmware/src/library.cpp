@@ -134,6 +134,9 @@ bool probe(fs::FS &fs, const char *file, Sound &s) {
   return true;
 }
 
+// "/sounds/x.wav" -> "x.wav"
+String baseName(const String &path) { return path.substring(path.lastIndexOf('/') + 1); }
+
 // "tree_call" -> "Tree call"
 void defaultName(const char *id, char *out, size_t cap) {
   strlcpy(out, id, cap);
@@ -229,9 +232,10 @@ void begin() {
   auto scan = [&](fs::FS &fs, bool card) {
     File dir = fs.open("/sounds");
     if (!dir || !dir.isDirectory()) return;
-    for (File f = dir.openNextFile(); f && count < kMaxSounds; f = dir.openNextFile()) {
-      String fname = f.name();
-      f.close();
+    // Names only, not openNextFile(): that one stops the whole listing at an entry it can't
+    // open, so one garbled entry on a flaky card hid every recording after it.
+    for (String entry = dir.getNextFileName(); entry.length() && count < kMaxSounds; entry = dir.getNextFileName()) {
+      String fname = baseName(entry);
       if (!fname.endsWith(".wav")) continue;
       fname.remove(fname.length() - 4);
       if (!validId(fname.c_str())) {
@@ -266,10 +270,9 @@ void begin() {
     size_t np = 0;
     File dir = card->exists("/packs") ? card->open("/packs") : File();  // no folder: no error line
     if (dir && dir.isDirectory()) {
-      for (File f = dir.openNextFile(); f; f = dir.openNextFile()) {
-        bool isDir = f.isDirectory();
-        String name = f.name();
-        f.close();
+      bool isDir = false;
+      for (String entry = dir.getNextFileName(&isDir); entry.length(); entry = dir.getNextFileName(&isDir)) {
+        String name = baseName(entry);
         if (!isDir) continue;
         if (!validPack(name.c_str())) {
           Serial.printf("pack %s skipped: folder name must be a-z, 0-9, _ or - (15 at most)\n", name.c_str());
