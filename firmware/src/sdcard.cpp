@@ -54,10 +54,9 @@ void begin() {
   if (dir && dir.isDirectory()) {
     char stale[8][40];
     size_t n = 0;
-    for (File f = dir.openNextFile(); f && n < 8; f = dir.openNextFile()) {
-      String name = f.name();
-      f.close();
-      if (name.endsWith(".tmp")) snprintf(stale[n++], sizeof(stale[0]), "/sounds/%s", name.c_str());
+    // Names only: openNextFile() would stop at an entry it can't open (see library.cpp).
+    for (String path = dir.getNextFileName(); path.length() && n < 8; path = dir.getNextFileName()) {
+      if (path.endsWith(".tmp")) strlcpy(stale[n++], path.c_str(), sizeof(stale[0]));
     }
     dir.close();
     for (size_t i = 0; i < n; i++) {
