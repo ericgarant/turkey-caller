@@ -23,6 +23,7 @@ bool failed = false; // the open upload was refused; ignore the rest of its data
 Result last{200, ""};
 File out;
 char id[25] = "";
+Labels labels;  // the open upload's
 uint32_t lastDataMs = 0;
 size_t written = 0;
 
@@ -61,6 +62,81 @@ Result fail(int code, const char *msg) {
   return last;
 }
 
+// Copies text a phone sent into `out`: valid UTF-8 only, control characters as spaces, no
+// spaces at either end, cut at a character boundary to fit.
+void cleanText(const char *in, char *out, size_t cap) {
+  size_t o = 0;
+  const uint8_t *p = (const uint8_t *)in;
+  while (*p == ' ' || (*p && *p < 0x20)) p++;
+  while (*p) {
+    uint8_t c = *p;
+    size_t len = c < 0x80 ? 1 : (c & 0xE0) == 0xC0 ? 2 : (c & 0xF0) == 0xE0 ? 3 : (c & 0xF8) == 0xF0 ? 4 : 0;
+    bool ok = len > 0 && !(len == 2 && c < 0xC2) && !(len == 4 && c > 0xF4);
+    for (size_t k = 1; ok && k < len; k++) ok = (p[k] & 0xC0) == 0x80;
+    if (!ok) {  // a stray byte: dropped
+      p++;
+      continue;
+    }
+    if (o + len >= cap) break;
+    if (len == 1 && (c < 0x20 || c == 0x7F)) out[o++] = ' ';
+    else for (size_t k = 0; k < len; k++) out[o++] = (char)p[k];
+    p += len;
+  }
+  while (o && out[o - 1] == ' ') o--;
+  out[o] = 0;
+}
+
+// Appends `s` to `j` as a JSON string.
+void jsonStr(String &j, const char *s) {
+  j += '"';
+  for (; *s; s++) {
+    if (*s == '"' || *s == '\\') j += '\\';
+    j += *s;  // control characters were turned into spaces by cleanText
+  }
+  j += '"';
+}
+
+// The labels to keep for upload `sid`: what it shows now (an existing upload) or the defaults,
+// with the fields `l` sets on top.
+void merge(const char *sid, const Labels &l, Labels &out) {
+  library::Sound s;
+  out = Labels{};
+  strlcpy(out.animal, "turkey", sizeof(out.animal));
+  if (library::find(sid, s) && s.card && !s.pack[0]) {
+    strlcpy(out.name, s.name, sizeof(out.name));
+    strlcpy(out.animal, s.animal, sizeof(out.animal));
+    strlcpy(out.hint, s.hint, sizeof(out.hint));
+  }
+  if (l.hasName) strlcpy(out.name, l.name, sizeof(out.name));
+  if (l.hasAnimal) strlcpy(out.animal, l.animal, sizeof(out.animal));
+  if (l.hasHint) strlcpy(out.hint, l.hint, sizeof(out.hint));
+}
+
+// Writes /sounds/<sid>.json: to "<sid>.m.tmp" first (sdcard::begin() drops a leftover one),
+// then renamed over the old sidecar.
+bool writeLabels(fs::FS &card, const char *sid, const Labels &l) {
+  String j = "{\"name\":";
+  jsonStr(j, l.name);
+  j += ",\"animal\":";
+  jsonStr(j, l.animal);
+  j += ",\"hint\":";
+  jsonStr(j, l.hint);
+  j += "}\n";
+  char tmp[40], file[40];
+  snprintf(tmp, sizeof(tmp), "/sounds/%s.m.tmp", sid);
+  library::metaPath(sid, file, sizeof(file));
+  File f = card.open(tmp, FILE_WRITE);
+  if (!f) return false;
+  bool ok = f.write((const uint8_t *)j.c_str(), j.length()) == j.length();
+  f.close();
+  if (ok) {
+    if (card.exists(file)) card.remove(file);
+    ok = card.rename(tmp, file);
+  }
+  if (!ok) card.remove(tmp);
+  return ok;
+}
+
 void reset() {
   owner = nullptr;
   busy = false;
@@ -70,6 +146,24 @@ void reset() {
 }
 
 }  // namespace
+
+Result makeLabels(const char *name, const char *animal, const char *hint, Labels &out) {
+  out = Labels{};
+  if (animal) {
+    if (!library::knownAnimal(animal)) return {400, "animal must be turkey, moose or deer"};
+    out.hasAnimal = true;
+    strlcpy(out.animal, animal, sizeof(out.animal));
+  }
+  if (name) {
+    out.hasName = true;
+    cleanText(name, out.name, sizeof(out.name));
+  }
+  if (hint) {
+    out.hasHint = true;
+    cleanText(hint, out.hint, sizeof(out.hint));
+  }
+  return {200, ""};
+}
 
 bool active() {
   Lock l;
@@ -82,13 +176,14 @@ bool remountCard() {
   return sdcard::remount();
 }
 
-Result start(const void *who, const char *filename, size_t contentLength) {
+Result start(const void *who, const char *filename, size_t contentLength, const Labels &l) {
   Lock l;
   if (busy && millis() - lastDataMs < kIdleMs) return {409, "another upload is running"};
   if (busy) fail(400, "dropped");  // a stale one: clean it up first
   reset();
   busy = true;
   owner = who;
+  labels = l;
   last = {200, ""};
   lastDataMs = millis();
   fs::FS *card = sdcard::fs();
@@ -173,6 +268,17 @@ Result finish(const void *who) {
                 (unsigned)heapmon::lowSince());
   char saved[sizeof(id)];
   strlcpy(saved, id, sizeof(saved));
+  // F16: the labels the page sent. None: a replaced recording keeps its sidecar, and a new one
+  // must not pick up an old, stray one.
+  char meta[40];
+  library::metaPath(saved, meta, sizeof(meta));
+  if (labels.hasName || labels.hasAnimal || labels.hasHint) {
+    Labels keep;
+    merge(saved, labels, keep);
+    if (!writeLabels(*card, saved, keep)) Serial.printf("upload %s: labels not saved (SD card write failed)\n", saved);
+  } else if (!library::has(saved) && card->exists(meta)) {
+    card->remove(meta);
+  }
   reset();
   uint32_t t0 = millis();
   sdcard::refresh();
@@ -201,10 +307,29 @@ Result remove(const char *sid) {
   char p[40];
   snprintf(p, sizeof(p), "/sounds/%s.wav", sid);
   if (!card->remove(p)) return {500, "SD card delete failed"};
+  library::metaPath(sid, p, sizeof(p));
+  if (card->exists(p)) card->remove(p);  // F16: its labels go too
   uint32_t t0 = millis();
   sdcard::refresh();
   library::dropUpload(sid);
   Serial.printf("deleted %s: list updated in %u ms\n", sid, (unsigned)(millis() - t0));
+  return {200, ""};
+}
+
+Result edit(const char *sid, const Labels &l) {
+  Lock l2;
+  library::Sound s;
+  if (!sid || !library::find(sid, s)) return {404, "no such sound"};
+  if (!s.card || s.pack[0]) return {400, "built-in and pack calls can't be edited"};
+  if (busy && !strcmp(id, sid)) return {409, "this recording is uploading"};
+  fs::FS *card = sdcard::fs();
+  if (!card) return {503, "No SD card: recordings unavailable"};
+  Labels keep;
+  merge(sid, l, keep);
+  if (!writeLabels(*card, sid, keep)) return {500, "SD card write failed"};
+  sdcard::refresh();
+  library::relabel(sid, keep.name, keep.animal, keep.hint);
+  Serial.printf("edited %s: \"%s\" (%s)\n", sid, keep.name, keep.animal);
   return {200, ""};
 }
 

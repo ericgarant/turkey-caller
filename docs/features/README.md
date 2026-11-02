@@ -21,6 +21,7 @@ Specs for what comes after Phase 0 (the Wi-Fi test page and Bluetooth ADPCM play
 | F13 | [Motion sensor and LED](F13-motion-led.md) | **Dropped** (Eric removed the PIR and LED, 25 Oct 2026) | — |
 | F14 | [Call packs: deer, moose and more](F14-call-packs.md) | Web (done with the spec), firmware after F12 | new B20 |
 | F15 | [Screen and buttons on the box](F15-on-device-ui.md), with phone-free mode | Firmware (done: #35, #36, #37) | new B21, B22 |
+| F16 | [Name, animal and description for my recordings](F16-upload-labels.md) | Firmware, web | new B23 |
 
 ## Suggested build order
 

@@ -3,7 +3,9 @@
 //      git), then any other flash .wav under "Other sounds";
 //   2. call packs on the SD card, alphabetical by folder: /packs/<pack>/index.json lists the
 //      pack's clips (only those; a WAV without an entry is ignored);
-//   3. recordings on the card in /sounds/ (uploads), in group "mine" ("Your recordings").
+//   3. recordings on the card in /sounds/ (uploads), in group "mine" ("Your recordings"). Each
+//      may have a sidecar /sounds/<id>.json, {"name":..,"animal":..,"hint":..} (F16): the
+//      animal picks the page's tab. No sidecar: the name comes from the id, animal turkey.
 // Lengths come from each WAV header. Ids share one namespace: a later sound with an id already
 // listed is skipped and logged, so the first one wins.
 #pragma once
@@ -41,5 +43,11 @@ bool validId(const char *id);
 // rescanning every file (a full begin() takes over 1 s with 40-odd clips on the card).
 bool putUpload(const char *id);
 void dropUpload(const char *id);
+// F16: an upload's sidecar file, "/sounds/<id>.json".
+void metaPath(const char *id, char *out, size_t cap);
+bool knownAnimal(const char *a);  // turkey, moose or deer
+// F16: shows an upload's new name, animal and hint in place (same spot in the list), after its
+// sidecar was written. An empty name means the default one from the id.
+bool relabel(const char *id, const char *name, const char *animal, const char *hint);
 
 }  // namespace library

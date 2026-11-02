@@ -85,7 +85,8 @@ One 2.4 GHz radio is time-shared between Wi-Fi and BT Classic.
 | `POST /api/bt/scan`, `GET /api/bt/devices` | Find speakers |
 | `POST /api/bt/connect {addr}`, `POST /api/bt/forget` | Pair / forget |
 | `GET/POST /api/config` | AP name, password, device name; live on every phone via `rev` (F05) |
-| `POST /api/sounds` (multipart `file`), `POST /api/sounds/delete {id}` | Upload / remove (no path params: ESPAsyncWebServer regex routes cost ~150 KB of flash). Uploads go to the SD card; refused with 409 for a built-in or pack id, or while a card sound plays |
+| `POST /api/sounds` (multipart `file`), `POST /api/sounds/delete {id}` | Upload / remove (no path params: ESPAsyncWebServer regex routes cost ~150 KB of flash). Uploads go to the SD card; refused with 409 for a built-in or pack id, or while a card sound plays. Optional fields `animal`, `name`, `hint` before the file (F16) |
+| `POST /api/sounds/edit {id, name, hint, animal}` | Relabel an upload: rewrites its sidecar `/sounds/<id>.json` = `{"name","animal","hint"}`, not the audio (F16). 404 unknown id, 400 built-in/pack or bad animal, 409 while it uploads, 503 no card. Uploads list with `group: "mine"` and the sidecar's animal (no sidecar: turkey) |
 | `WS /ws` | Status pushes; also accepts play, stop, volume |
 
 ## Phases
