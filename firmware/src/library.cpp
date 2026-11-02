@@ -2,6 +2,7 @@
 
 #include <LittleFS.h>
 #include <esp_heap_caps.h>
+#include <esp_random.h>
 
 #include "sdcard.h"
 #include "wav.h"
@@ -16,6 +17,8 @@ constexpr uint32_t kMaxPackClipMs = 60000;  // F14: pack clips up to 60 s each
 Sound *sounds = nullptr;  // exactly `n` entries, in PSRAM when the board has it (F14)
 size_t n = 0;
 uint32_t freeBytes = 0, totalBytes = 0;
+// Bumped whenever the list changes; the page refetches when `snd` moves. Starts random at boot,
+// so a page left open across a restart (say, with a different SD card) still sees a change.
 volatile uint32_t listRev = 0;
 portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
 
@@ -186,6 +189,7 @@ void path(const Sound &s, char *out, size_t cap) {
 
 void begin() {
   uint32_t startMs = millis();
+  listRev = esp_random();
   size_t count = 0;
   // Scratch list while scanning (~9 KB), freed once the list is built.
   Sound *found = (Sound *)allocList(kMaxSounds * sizeof(Sound));
