@@ -176,14 +176,14 @@ bool remountCard() {
   return sdcard::remount();
 }
 
-Result start(const void *who, const char *filename, size_t contentLength, const Labels &l) {
+Result start(const void *who, const char *filename, size_t contentLength, const Labels &lbl) {
   Lock l;
   if (busy && millis() - lastDataMs < kIdleMs) return {409, "another upload is running"};
   if (busy) fail(400, "dropped");  // a stale one: clean it up first
   reset();
   busy = true;
   owner = who;
-  labels = l;
+  labels = lbl;
   last = {200, ""};
   lastDataMs = millis();
   fs::FS *card = sdcard::fs();
