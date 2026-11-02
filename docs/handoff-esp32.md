@@ -51,7 +51,7 @@ Notes for whoever picks up the firmware next. These are the things the specs and
 ## Gotchas
 
 - `millis() | 1` is fine for "0 means unset" flags. As a timestamp compared with a later `millis()` it can be 1 ms in the future, so `now - t` wraps. That caused the radio-preference flapping in #11.
-- `server.on()` matches sub-paths, and the first match wins. Register `/api/sounds/delete` before `/api/sounds`.
+- `server.on()` matches sub-paths, and the first match wins. Register `/api/sounds/delete` and `/api/sounds/edit` before `/api/sounds`.
 - Each HTTP request has a single `onDisconnect` slot, and the in-flight counter uses it. Don't set it elsewhere.
 - The ESP32-A2DP library delays 10 s in its stack-up handler. That's why the first connect after boot takes about 11 s.
 - The library ignores heartbeats while it is "discovering". `bt.cpp` puts it back to "unconnected" after a fruitless search. Without that, reconnect would stop for good.

@@ -42,8 +42,9 @@ Agreed with the firmware thread; the summary table is in `../docs/architecture.m
 | `POST /api/bt/forget` | Disconnects and clears the saved speaker, no restart; stops playback |
 | `GET /api/config` → `ap_ssid`, `device_name`, `default_pass`, `rev`; `POST /api/config` adds `ap_pass` and `rev` | Password is never returned; empty means unchanged. Stale `rev` → 409. Reply `restart` is true only for Wi-Fi name or password changes. Status carries `cfg` (the rev) so every phone reloads on a change; see F05 |
 | WS `{"evt":"restart","reason":"settings"\|"reset","ssid"}` | Sent just before a settings restart or BOOT reset; the page shows the rejoin message |
-| `POST /api/sounds` multipart `file` | The page renames the file to `a-z0-9_` (max 24 chars) + `.wav`. 409 while playing, 413 when full |
-| `POST /api/sounds/delete` `id` | 409 while playing |
+| `POST /api/sounds` multipart `file`, optional `animal`, `name`, `hint` | The page renames the file to `a-z0-9_` (max 24 chars) + `.wav`. 409 while playing, 413 when full. F16: append `animal` (`turkey`, `moose` or `deer`), `name` and `hint` to the FormData **before** `file`, or the board doesn't see them. A field left out keeps its value (new upload: turkey, name from the id, no hint). Unknown animal: 400, nothing saved. `name` is cut to 32 bytes and `hint` to 47 bytes of UTF-8 (accented letters take 2), so cap the inputs to match |
+| `POST /api/sounds/edit` `id`, any of `name`, `hint`, `animal` | F16: relabels an upload; only its sidecar `/sounds/<id>.json` (`{"name","animal","hint"}`) is rewritten, never the audio. Omitted fields are kept; an empty `name` goes back to the name from the id. Same checks as upload. 404 unknown id, 400 built-in or pack call or bad animal, 409 while that recording is still uploading, 503 no SD card. Works while a call plays. The status `snd` rev moves, so every phone reloads `/api/sounds` |
+| `POST /api/sounds/delete` `id` | 409 while playing. Also removes the upload's sidecar (F16) |
 | `WS /ws` | Board pushes the `/api/status` JSON on change, every 2 s while playing, else every 10 s. The page sends `{"cmd":"volume","level":N}` and `{"cmd":"repeat","on":true}` over it; play and stop go over HTTP so errors come back as status codes. Without the socket the page polls `/api/status` every 3 s |
 
 ## How the page reaches the board

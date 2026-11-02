@@ -370,11 +370,27 @@ void keepResult(AsyncWebServerRequest *req, uploads::Result r) {
   if (req->_tempObject) *(uploads::Result *)req->_tempObject = r;
 }
 
+// F16: the labels from the fields `name`, `animal` and `hint`; nullptr for one not sent.
+uploads::Result readLabels(AsyncWebServerRequest *req, uploads::Labels &out) {
+  auto field = [&](const char *k) -> const char * {
+    const AsyncWebParameter *p = req->getParam(k, true);
+    if (!p) p = req->getParam(k);
+    return p ? p->value().c_str() : nullptr;
+  };
+  return uploads::makeLabels(field("name"), field("animal"), field("hint"), out);
+}
+
 void handleUploadChunk(AsyncWebServerRequest *req, const String &filename, size_t index, uint8_t *data, size_t len, bool final) {
   uploads::Result *prev = (uploads::Result *)req->_tempObject;
   if (prev && prev->code != 200) return;  // already refused: drop the rest
   uploads::Result r{200, ""};
-  if (index == 0) r = uploads::start(req, filename.c_str(), req->contentLength());
+  if (index == 0) {
+    // The form fields come before the file part, so they are already parsed here.
+    uploads::Labels labels;
+    r = readLabels(req, labels);
+    if (r.code == 200) r = uploads::start(req, filename.c_str(), req->contentLength(), labels);
+    else return keepResult(req, r);  // nothing opened yet
+  }
   if (r.code == 200 && len) r = uploads::data(req, data, len);
   if (r.code == 200 && final) r = uploads::finish(req);
   else if (r.code != 200) uploads::finish(req);  // clears this request's refused upload (no-op for another's)
@@ -392,6 +408,16 @@ void handleUploadDone(AsyncWebServerRequest *req) {
 void handleDelete(AsyncWebServerRequest *req) {
   String id = param(req, "id");
   uploads::Result r = uploads::remove(id.c_str());
+  if (r.code != 200) return sendError(req, r.code, r.msg);
+  pushNow = true;
+  sendOk(req);
+}
+
+void handleEdit(AsyncWebServerRequest *req) {
+  String id = param(req, "id");
+  uploads::Labels labels;
+  uploads::Result r = readLabels(req, labels);
+  if (r.code == 200) r = uploads::edit(id.c_str(), labels);
   if (r.code != 200) return sendError(req, r.code, r.msg);
   pushNow = true;
   sendOk(req);
@@ -605,6 +631,7 @@ void begin() {
   server.on("/api/status", HTTP_GET, handleStatus);
   // on() also matches sub-paths and the first match wins, so /api/sounds/delete goes first.
   server.on("/api/sounds/delete", HTTP_POST, handleDelete);  // F03
+  server.on("/api/sounds/edit", HTTP_POST, handleEdit);      // F16
   server.on("/api/sounds", HTTP_GET, handleSounds);
   server.on("/api/sounds", HTTP_POST, handleUploadDone, handleUploadChunk);  // upload: F03
   server.on("/api/config", HTTP_GET, handleConfigGet);    // F05

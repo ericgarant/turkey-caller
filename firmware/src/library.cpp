@@ -35,6 +35,7 @@ struct Entry {
 // Minimal reader for an index: a JSON array of flat objects with string values, e.g.
 // [{"id":"tree_call","name":"Tree call","group":"soft","animal":"turkey","hint":"..."}, ...].
 // Calls `fn` once per object. Unknown keys are ignored; long values are cut to fit.
+// A single object, not in an array, is read too: an upload's sidecar (F16).
 template <typename Fn>
 void parseIndex(const char *p, Fn fn) {
   char key[16], val[64];
@@ -54,7 +55,8 @@ void parseIndex(const char *p, Fn fn) {
     return true;
   };
   skipWs();
-  if (*p++ != '[') return;
+  bool single = *p == '{';
+  if (!single && *p++ != '[') return;
   for (;;) {
     skipWs();
     if (*p != '{') return;
@@ -75,6 +77,7 @@ void parseIndex(const char *p, Fn fn) {
       else if (!strcmp(key, "hint")) strlcpy(e.hint, val, sizeof(e.hint));
     }
     fn(e);
+    if (single) return;
   }
 }
 
@@ -155,8 +158,6 @@ bool knownGroup(const char *g) {
   return false;
 }
 
-bool knownAnimal(const char *a) { return !strcmp(a, "turkey") || !strcmp(a, "moose") || !strcmp(a, "deer"); }
-
 // Pack folders: a-z, 0-9, _ and -, at most 15 characters.
 bool validPack(const char *p) {
   size_t len = strlen(p);
@@ -166,6 +167,22 @@ bool validPack(const char *p) {
   return true;
 }
 
+// An upload's labels (F16): the defaults, then its sidecar if it has one.
+void uploadLabels(fs::FS &fs, Sound &s) {
+  defaultName(s.id, s.name, sizeof(s.name));
+  strlcpy(s.animal, "turkey", sizeof(s.animal));
+  strlcpy(s.group, "mine", sizeof(s.group));
+  s.hint[0] = 0;
+  char file[40];
+  metaPath(s.id, file, sizeof(file));
+  if (!fs.exists(file)) return;  // older uploads have none: no error line
+  readIndex(fs, file, [&](const Entry &e) {
+    if (e.name[0]) strlcpy(s.name, e.name, sizeof(s.name));
+    if (knownAnimal(e.animal)) strlcpy(s.animal, e.animal, sizeof(s.animal));
+    strlcpy(s.hint, e.hint, sizeof(s.hint));
+  });
+}
+
 int find(const char *id) {
   for (size_t i = 0; i < n; i++)
     if (!strcmp(sounds[i].id, id)) return (int)i;
@@ -173,6 +190,10 @@ int find(const char *id) {
 }
 
 }  // namespace
+
+bool knownAnimal(const char *a) { return !strcmp(a, "turkey") || !strcmp(a, "moose") || !strcmp(a, "deer"); }
+
+void metaPath(const char *id, char *out, size_t cap) { snprintf(out, cap, "/sounds/%s.json", id); }
 
 bool validId(const char *id) {
   size_t len = id ? strlen(id) : 0;
@@ -256,9 +277,12 @@ void begin() {
       char file[56];
       path(s, file, sizeof(file));
       if (!probe(fs, file, s)) continue;
-      defaultName(s.id, s.name, sizeof(s.name));
-      strlcpy(s.animal, "turkey", sizeof(s.animal));
-      if (card) strlcpy(s.group, "mine", sizeof(s.group));
+      if (card) {
+        uploadLabels(fs, s);
+      } else {
+        defaultName(s.id, s.name, sizeof(s.name));
+        strlcpy(s.animal, "turkey", sizeof(s.animal));
+      }
       found[count++] = s;
     }
     dir.close();
@@ -385,13 +409,29 @@ bool putUpload(const char *id) {
   char file[56];
   path(s, file, sizeof(file));
   if (!probe(*card, file, s)) return false;
-  defaultName(s.id, s.name, sizeof(s.name));
-  strlcpy(s.animal, "turkey", sizeof(s.animal));
-  strlcpy(s.group, "mine", sizeof(s.group));
+  uploadLabels(*card, s);
   return replaceList(id, &s);
 }
 
 void dropUpload(const char *id) { replaceList(id, nullptr); }
+
+bool relabel(const char *id, const char *name, const char *animal, const char *hint) {
+  if (!knownAnimal(animal)) return false;
+  char label[sizeof(Sound::name)];
+  if (name[0]) strlcpy(label, name, sizeof(label));
+  else defaultName(id, label, sizeof(label));
+  portENTER_CRITICAL(&lock);
+  int i = find(id);
+  bool ok = i >= 0 && sounds[i].card && !sounds[i].pack[0];
+  if (ok) {
+    strlcpy(sounds[i].name, label, sizeof(sounds[i].name));
+    strlcpy(sounds[i].animal, animal, sizeof(sounds[i].animal));
+    strlcpy(sounds[i].hint, hint, sizeof(sounds[i].hint));
+    listRev = listRev + 1;
+  }
+  portEXIT_CRITICAL(&lock);
+  return ok;
+}
 
 uint32_t rev() { return listRev; }
 uint32_t fsFree() { return freeBytes; }

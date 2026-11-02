@@ -11,11 +11,24 @@ struct Result {
   const char *msg;  // error text for the page ("" on success)
 };
 
+// F16: an upload's labels, from the form fields `name`, `animal` and `hint`. Fields the request
+// left out keep their current value (or the default: name from the id, turkey, no hint).
+struct Labels {
+  bool hasName = false, hasAnimal = false, hasHint = false;
+  char name[33] = "";   // 32 bytes of UTF-8 at most; "" = the default name from the id
+  char animal[8] = "";  // turkey, moose or deer
+  char hint[48] = "";   // 47 bytes at most
+};
+// Checks and cleans the fields (nullptr = not sent): control characters become spaces, the
+// ends are trimmed, and long text is cut at a character boundary. 400 for an unknown animal.
+Result makeLabels(const char *name, const char *animal, const char *hint, Labels &out);
+
 // Called from the web server's upload callback, in order: start() with the file name and the
 // request's Content-Length, then data() for each chunk, then finish(). Every call returns the
 // result so far; once it is not 200 the rest is ignored and the temp file is gone.
 // `owner` is the request: chunks of a second, refused upload never touch the open one.
-Result start(const void *owner, const char *filename, size_t contentLength);
+// `labels` (F16) go into the sidecar /sounds/<id>.json once the file is saved.
+Result start(const void *owner, const char *filename, size_t contentLength, const Labels &labels);
 Result data(const void *owner, const uint8_t *buf, size_t len);
 Result finish(const void *owner);
 // Drops an upload that stopped sending (the phone left Wi-Fi). From web::loop().
@@ -25,7 +38,10 @@ bool active();
 // meanwhile. Refuses while an upload is open. From the player's task.
 bool remountCard();
 
-// Deletes an upload ("mine") from the card. Built-in and pack calls can't be deleted.
+// Deletes an upload ("mine") from the card, and its sidecar. Built-in and pack calls can't be deleted.
 Result remove(const char *id);
+// F16: renames an upload, moves it to another animal or changes its hint, by rewriting its
+// sidecar; the audio is not touched. Uploads only.
+Result edit(const char *id, const Labels &labels);
 
 }  // namespace uploads
