@@ -5,7 +5,7 @@ The control page the ESP32 serves: **Calls**, **Speaker** and **Settings** scree
 | Path | What |
 |---|---|
 | `index.html` | The page |
-| `build.py` | Gzips the page into `firmware/src/web_page.h` (git-ignored) and fails over 20 KB |
+| `build.py` | Gzips the page into `firmware/src/web_page.h` (git-ignored) and fails over 24 KB |
 | `mock/server.mjs` | Fake ESP32 API with no dependencies, so the page can be built and tested without the board. Mock-only hook: `POST /api/mock/speaker mode=asleep|off|on` puts the speaker to sleep or out of reach to test waking |
 | `test/smoke.mjs` | Playwright run of the main flows against the mock at phone width. CI runs it on every change under `web/` |
 

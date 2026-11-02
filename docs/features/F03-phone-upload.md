@@ -7,7 +7,7 @@
 ## Behavior
 
 - The Settings screen file picker accepts any audio the phone browser can decode (`audio/*`: MP3, M4A/AAC, WAV, OGG). It is no longer limited to `.mp3`.
-- The page converts on the phone before upload: decode (`decodeAudioData`), mix to mono, resample to 22.05 kHz (`OfflineAudioContext`), encode mono IMA ADPCM, wrap in a WAV header (standard block size of 256 bytes). The encoder is plain JS and adds well under 2 KB gzipped to the page (the 20 KB budget in `web/build.py` still holds).
+- The page converts on the phone before upload: decode (`decodeAudioData`), mix to mono, resample to 22.05 kHz (`OfflineAudioContext`), encode mono IMA ADPCM, wrap in a WAV header (standard block size of 256 bytes). The encoder is plain JS and adds well under 2 KB gzipped to the page (the 24 KB budget in `web/build.py` still holds).
 - Before converting, the page shows the converted size and length. If it will not fit in the free room (see F09, keeping a 32 KB reserve), it says so and does not upload. A cap of 60 s per clip is applied by trimming with a warning, so one long recording cannot fill the board.
 - Optional volume match: peak-normalize the converted clip to about 90% so uploads are not much quieter than the built-ins.
 - The id comes from the file name (`a-z0-9_`, at most 24 characters, `.wav`). Same-name upload asks before replacing, as today.

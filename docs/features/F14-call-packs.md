@@ -74,4 +74,4 @@ Made from Eric's MP3s (folders TurkeyCalls, MooseCalls, MoosePreRutCalls and Dee
 3. With the card out, the board boots, the turkey calls play, and the Moose tab shows the SD card hint.
 4. An upload named `deer_rattle` gets 409. A pack with a duplicate id lists the first and logs the second.
 5. Pulling the card while a deer or moose call plays: it stops with a toast, no reset (F12 criterion 5).
-6. The page stays under its 20 KB gzip budget.
+6. The page stays under its 24 KB gzip budget.
