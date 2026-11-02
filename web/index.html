@@ -146,6 +146,7 @@ input[type=range]::-moz-range-thumb{width:28px;height:28px;border-radius:50%;bac
 form{display:flex;flex-direction:column;gap:14px;margin:0}
 dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0;font-size:14.5px}
 dt{color:var(--muted)}dd{margin:0;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.meta{margin:6px 0 0;padding:12px;border:2px dashed var(--line);border-radius:var(--r);gap:12px}.meta .btns{display:flex;gap:8px}.meta .btns .btn{flex:1}.pick{display:flex;border:2px solid var(--fg);border-radius:var(--r);overflow:hidden}.pick button{flex:1;min-height:44px;border:0;border-left:2px solid var(--fg);background:var(--surface);font:900 18px var(--display);text-transform:uppercase;letter-spacing:.08em;cursor:pointer}.pick button:first-child{border-left:0}.pick button[aria-checked=true]{background:var(--fg);color:var(--bg)}.list li.edit{flex-wrap:wrap}.list li.edit .meta{flex:1 0 100%;margin:0}
 .spin{width:16px;height:16px;border:3px solid var(--line);border-top-color:var(--fg);border-radius:50%;animation:spin .8s linear infinite;display:inline-block;vertical-align:-3px;margin-right:6px}
 @keyframes spin{to{transform:rotate(1turn)}}
 nav{position:sticky;bottom:0;z-index:6;background:var(--fg);display:grid;grid-template-columns:repeat(3,1fr);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -210,6 +211,7 @@ nav button[aria-current="page"]{background:var(--accent);color:var(--on-accent)}
           <div class="field" id="upField" style="margin-top:10px" hidden>
             <label for="upFile">Add a sound</label>
             <input type="file" id="upFile" accept="audio/*">
+            <form class="meta" id="upPanel" hidden novalidate></form>
             <span class="sub" id="upNote">Any recording your phone can play (MP3, M4A, WAV), up to 60 s. It is saved on the SD card under "Your recordings", and the file name becomes the button name.</span>
           </div>
         </div>
@@ -275,6 +277,7 @@ nav button[aria-current="page"]{background:var(--accent);color:var(--on-accent)}
             <li><b>Wi-Fi name</b> and <b>password</b> (8 to 63 plain letters, digits and symbols, no accents): changing either restarts the caller. Rejoin the new Wi-Fi afterwards.</li>
             <li><b>Device name</b> shows at the top of this page. No Wi-Fi restart.</li>
             <li>Every change shows on both phones at once. If the other phone saved first, yours asks you to review before saving.</li>
+            <li><b>Add a sound</b> (needs the SD card): pick a recording, say which animal it is, and give it a name and a description. It shows on that animal's tab under "Your recordings". <b>Edit</b> changes the name, description or animal later.</li>
             <li>Change the factory password before you rely on the caller.</li>
           </ul>
         </div>
@@ -551,8 +554,34 @@ forget.onclick=async()=>{
 // Recordings from the phone go to the SD card (F03, F12); only they can be deleted.
 const EDIT_SOUNDS=true;
 $("upField").hidden=true;  // shown by paint() once the board reports a card
+// Name and description of a recording (F16): limits in bytes, as the board counts them
+const B=v=>new TextEncoder().encode(v).length;
+function metaForm(form,m,okLabel,onOk,onCancel){
+  let an=m.animal||"turkey";
+  form.innerHTML=`<div class="field"><label>Animal</label><div class="pick" role="radiogroup" aria-label="Animal">${Object.keys(ANIMALS).map(a=>`<button type="button" role="radio" data-a="${a}" aria-checked="${a===an}">${ANIMALS[a]}</button>`).join("")}</div></div>
+<div class="field"><label>Name</label><input data-f="name" maxlength="32" value="${esc(m.name||"")}" autocomplete="off"></div>
+<div class="field"><label>Description <small class="sub">(optional)</small></label><input data-f="hint" maxlength="47" value="${esc(m.hint||"")}" autocomplete="off" placeholder="When to use it"><span class="err" hidden></span></div>
+<div class="btns"><button class="btn primary" type="submit">${okLabel}</button><button class="btn" type="button" data-x>Cancel</button></div>`;
+  form.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>{an=b.dataset.a;form.querySelectorAll("[data-a]").forEach(x=>x.setAttribute("aria-checked",x===b))});
+  const f=k=>form.querySelector(`[data-f=${k}]`),err=form.querySelector(".err");
+  form.onsubmit=e=>{e.preventDefault();
+    const v={animal:an,name:f("name").value.trim(),hint:f("hint").value.trim()};
+    const bad=!v.name?"Give it a name":B(v.name)>32?"Name too long: 32 characters at most":B(v.hint)>47?"Description too long: 47 characters at most":"";
+    err.textContent=bad;err.hidden=!bad;if(!bad)onOk(v)};
+  form.querySelector("[data-x]").onclick=onCancel;
+  form.hidden=false;
+}
 function renderSounds(){
-  $("sndList").innerHTML=sounds.map(s=>`<li><div class="grow"><div class="nm">${esc(s.name)}</div><div class="sub mono">${esc(s.id)}.wav${s.ms?" · "+fmtS(s.ms):""}${s.bytes?" · "+fmtKB(s.bytes):""}</div></div>${EDIT_SOUNDS&&s.group==="mine"?`<button class="btn danger" type="button" data-del="${esc(s.id)}">Delete</button>`:""}</li>`).join("");
+  $("sndList").innerHTML=sounds.map(s=>`<li data-s="${esc(s.id)}"><div class="grow"><div class="nm">${esc(s.name)}</div><div class="sub mono">${esc(s.id)}.wav${s.ms?" · "+fmtS(s.ms):""}${s.bytes?" · "+fmtKB(s.bytes):""}${s.group==="mine"?" · "+ANIMALS[s.animal]:""}</div>${s.group==="mine"&&s.hint?`<div class="sub">${esc(s.hint)}</div>`:""}</div>${EDIT_SOUNDS&&s.group==="mine"?`<button class="btn" type="button" data-edit="${esc(s.id)}">Edit</button><button class="btn danger" type="button" data-del="${esc(s.id)}">Delete</button>`:""}</li>`).join("");
+  $("sndList").querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{
+    const li=b.closest("li"),s=sounds.find(x=>x.id===b.dataset.edit);
+    if(li.classList.contains("edit")){renderSounds();return}
+    const f=document.createElement("form");f.className="meta";li.classList.add("edit");li.appendChild(f);
+    metaForm(f,s,"Save",async v=>{
+      try{await api("/api/sounds/edit",Object.assign({id:s.id},v));toast("Saved");await loadSounds()}
+      catch(e){toast(why(e))}
+    },renderSounds);
+  });
   $("sndList").querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{
     if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Tap to confirm";setTimeout(()=>{if(b.isConnected){delete b.dataset.armed;b.textContent="Delete"}},3000);return}
     b.disabled=true;
@@ -593,24 +622,22 @@ $("upFile").onchange=async e=>{
   note.innerHTML=UP_NOTE;
   const old=sounds.find(s=>s.id===id);
   if(old&&old.group!=="mine"){toast(`"${id}" is the name of a built-in call. Rename the file first`);return}
-  const go=()=>{note.innerHTML=UP_NOTE;upload(w,id,!!old)};
-  if(!old)return go();
-  // Same name as an existing recording: ask before replacing it
-  note.innerHTML=`<b>${esc(old.name)}</b> is already on the caller. <button class="btn" type="button" id="upYes">Replace it</button> <button class="btn" type="button" id="upNo">Keep it</button>`;
-  $("upYes").onclick=go;
-  $("upNo").onclick=()=>{note.innerHTML=UP_NOTE};
+  // Ask which animal it is, and for a name and description (F16). Same name as a recording: asks before replacing it.
+  const panel=$("upPanel"),close=()=>{panel.hidden=true;panel.innerHTML="";note.innerHTML=UP_NOTE};
+  note.innerHTML=old?`<b>${esc(old.name)}</b> is already on the caller. Saving replaces its sound.`:`Converted ${esc(f.name)} (${fmtS(w.ms)}). Which animal is it?`;
+  metaForm(panel,old||{animal:animal,name:id.replace(/_/g," ").replace(/^./,c=>c.toUpperCase()).slice(0,32)},old?"Replace it":"Add the call",v=>{close();upload(w,id,!!old,v)},close);
 };
-function upload(w,id,replace){
+function upload(w,id,replace,meta){
   if(w.cut)toast(`Kept the first ${MAXS} s`);
   const size=w.blob.size,room=st.sdFree;
   // The old file stays until the new one is complete, so a replace needs room for both.
   if(room!=null&&size+32768>room){toast(`Not enough room: ${fmtKB(size)} needed, ${fmtKB(room)} free`);return}
-  const fd=new FormData();fd.append("file",w.blob,id+".wav");
+  const fd=new FormData();for(const k of ["animal","name","hint"])fd.append(k,meta[k]);fd.append("file",w.blob,id+".wav");  // text fields first: the board reads them before the file
   const x=new XMLHttpRequest(),note=$("upNote");
   x.open("POST","/api/sounds");
   x.upload.onprogress=p=>{if(p.lengthComputable)note.textContent=`Uploading ${id} (${fmtS(w.ms)}, ${fmtKB(size)})… ${Math.round(p.loaded/p.total*100)}%`};
   x.onload=()=>{note.innerHTML=UP_NOTE;let m="";try{m=JSON.parse(x.responseText).error||""}catch(_){}
-    if(x.status<300){toast((replace?"Replaced ":"Added ")+id);loadSounds()}
+    if(x.status<300){toast((replace?"Replaced ":"Added ")+meta.name);animal=meta.animal;try{localStorage.animal=animal}catch(_){}loadSounds()}
     else toast(x.status===409&&/playback/.test(m)?"Stop the call first, then add the sound":x.status===413?"Not enough room on the caller":m||"Upload failed ("+x.status+")")};
   x.onerror=()=>{note.innerHTML=UP_NOTE;toast("Upload failed. Are you on the caller's Wi-Fi?")};
   x.send(fd);

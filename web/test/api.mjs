@@ -31,6 +31,7 @@ const adpcmWav = (size, { format = 0x11, rate = 22050 } = {}) => {
 };
 const upload = async (name, size, opts) => {
   const fd = new FormData();
+  for (const k of ["animal", "name", "hint"]) if (opts && opts[k] !== undefined) fd.append(k, opts[k]);  // text fields first, like the page
   fd.append("file", new Blob([opts === "junk" ? Buffer.alloc(size, 1) : adpcmWav(size, opts)]), name);
   const r = await fetch(base + "/api/sounds", { method: "POST", body: fd });
   return { code: r.status, body: await r.json() };
@@ -124,6 +125,19 @@ try {
     assert.equal((await upload("owl_hoot.wav", 6000)).code, 200);
     assert.equal((await get("/api/sounds")).length, before + 1);
     assert.equal((await post("/api/sounds/delete", { id: "cluck" })).code, 400);
+    // F16: animal, name and description on upload, and edit without touching the audio
+    assert.equal((await upload("owl_hoot.wav", 6000, { animal: "moose", name: "Owl", hint: "Dusk" })).code, 200);
+    let o = (await get("/api/sounds")).find((x) => x.id === "owl_hoot");
+    assert.deepEqual([o.animal, o.name, o.hint, o.group], ["moose", "Owl", "Dusk", "mine"]);
+    assert.equal((await upload("owl_hoot.wav", 6000, { animal: "bear" })).code, 400);
+    assert.equal((await post("/api/sounds/edit", { id: "owl_hoot", name: "Barred owl", animal: "deer", hint: "" })).code, 200);
+    o = (await get("/api/sounds")).find((x) => x.id === "owl_hoot");
+    assert.deepEqual([o.animal, o.name, o.hint, o.bytes > 0], ["deer", "Barred owl", "", true]);
+    assert.equal((await post("/api/sounds/edit", { id: "owl_hoot", name: "x".repeat(33) })).code, 400);
+    assert.equal((await post("/api/sounds/edit", { id: "owl_hoot", name: "" })).code, 200);  // empty name: back to the default from the id
+    assert.equal((await get("/api/sounds")).find((x) => x.id === "owl_hoot").name, "Owl hoot");
+    assert.equal((await post("/api/sounds/edit", { id: "cluck", name: "Nope" })).code, 400);
+    assert.equal((await post("/api/sounds/edit", { id: "nothing", name: "Nope" })).code, 404);
     assert.equal((await post("/api/sounds/delete", { id: "owl_hoot" })).code, 200);
     assert.equal((await post("/api/sounds/delete", { id: "owl_hoot" })).code, 404);
     assert.equal((await get("/api/sounds")).length, before);

@@ -131,9 +131,26 @@ try {
     b.writeUInt32LE(44100, 24); b.writeUInt32LE(44100 * 4, 28); b.writeUInt16LE(4, 32); b.writeUInt16LE(16, 34); b.write("data", 36); b.writeUInt32LE(n * 4, 40);
     for (let i = 0; i < n; i++) { const v = Math.round(12000 * Math.sin(2 * Math.PI * 440 * i / 44100)); b.writeInt16LE(v, 44 + i * 4); b.writeInt16LE(v, 46 + i * 4); }
     await page.setInputFiles("#upFile", { name: "Owl Hoot.wav", mimeType: "audio/wav", buffer: b });
+    // The page asks which animal it is, and for a name and description (F16)
+    await page.waitForSelector("#upPanel:not([hidden])", { timeout: 10000 });
+    assert.equal(await page.inputValue('#upPanel [data-f="name"]'), "Owl hoot");
+    await page.click('#upPanel [data-a="deer"]');
+    await page.fill('#upPanel [data-f="name"]', "Barred owl");
+    await page.fill('#upPanel [data-f="hint"]', "Locator at dusk");
+    await page.click('#upPanel button[type="submit"]');
     await page.waitForFunction(() => [...document.querySelectorAll("#sndList .mono")].some((e) => e.textContent.startsWith("owl_hoot.wav")), null, { timeout: 10000 });
     const s = await page.evaluate(async () => (await (await fetch("/api/sounds")).json()).find((x) => x.id === "owl_hoot"));
     assert.equal(s.group, "mine");
+    assert.deepEqual([s.animal, s.name, s.hint], ["deer", "Barred owl", "Locator at dusk"]);
+    // It shows on the Deer tab, not Turkey; Edit renames it and moves it to Moose
+    assert.equal(await page.evaluate(() => localStorage.animal), "deer");
+    await page.click('#sndList [data-edit="owl_hoot"]');
+    await page.click('#sndList [data-a="moose"]');
+    await page.fill('#sndList [data-f="name"]', "Owl");
+    await page.click('#sndList button[type="submit"]');
+    await page.waitForFunction(() => [...document.querySelectorAll("#sndList .nm")].some((e) => e.textContent === "Owl"), null, { timeout: 8000 });
+    const e2 = await page.evaluate(async () => (await (await fetch("/api/sounds")).json()).find((x) => x.id === "owl_hoot"));
+    assert.deepEqual([e2.animal, e2.name, e2.hint], ["moose", "Owl", "Locator at dusk"]);
     assert.ok(s.bytes > 11000 && s.bytes < 13000, `about 11 KB for 1 s of ADPCM, got ${s.bytes}`);
     assert.equal(await page.locator("#sndList [data-del]").count(), 1);
     await page.click('#sndList [data-del="owl_hoot"]');

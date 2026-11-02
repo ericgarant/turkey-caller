@@ -77,6 +77,13 @@ function wavError(file) {
   if (file.readUInt32LE(f + 12) !== 22050) return "upload must be 22.05 kHz";
   return "";
 }
+// F16 limits, in UTF-8 bytes like the board's buffers: name 32, hint 47, animal turkey, moose or deer
+const metaError = (m) => {
+  if (m.animal !== undefined && !["turkey", "moose", "deer"].includes(m.animal)) return "animal must be turkey, moose or deer";
+  if (m.name !== undefined && Buffer.byteLength(m.name) > 32) return "name must be 1 to 32 characters";
+  if (m.hint !== undefined && Buffer.byteLength(m.hint) > 47) return "description must be at most 47 characters";
+  return "";
+};
 const cardPlaying = () => { const s = sounds.find((x) => x.id === st.current); return st.playing && s && (s.group === "mine" || s.animal !== "turkey"); };
 
 function status() {
@@ -262,15 +269,35 @@ const server = http.createServer(async (req, res) => {
       if (!m) return fail(res, 400, "file must be name.wav with a-z, 0-9 and _");
       const old = sounds.find((x) => x.id === m[1]);
       if (old && old.group !== "mine") return fail(res, 409, "name already used by a built-in or pack call");
+      // Optional text fields before the file part (F16): animal, name, hint
+      const meta = {};
+      for (const k of ["animal", "name", "hint"]) {
+        const f = new RegExp(`name="${k}"\\r\\n\\r\\n([^\\r]*)\\r\\n`).exec(raw.toString("utf8"));
+        if (f) meta[k] = f[1].trim();
+      }
+      const bad = metaError(meta);
+      if (bad) return fail(res, 400, bad);
       if (cardPlaying()) return fail(res, 409, "stop playback first");
       if (raw.length + 32768 > sdStatus().sdFree) return fail(res, 413, "not enough room on the SD card");
       const why = wavError(raw);
       if (why) return fail(res, 400, why);
       const ms = Math.round(raw.length / BYTES_PER_MS);
       sndRev++;
-      if (old) Object.assign(old, { bytes: raw.length, ms });
-      else sounds.push({ id: m[1], name: m[1].replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()), animal: "turkey", group: "mine", hint: "", ms, bytes: raw.length });
+      if (old) Object.assign(old, { bytes: raw.length, ms }, meta);
+      else sounds.push({ id: m[1], name: meta.name || m[1].replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()), animal: meta.animal || "turkey", group: "mine", hint: meta.hint || "", ms, bytes: raw.length });
       return ok(res);
+    }
+    // F16: change an upload's name, description or animal without touching the audio
+    case "POST /api/sounds/edit": {
+      const s = sounds.find((x) => x.id === p.id);
+      if (!s) return fail(res, 404, "no such sound");
+      if (s.group !== "mine") return fail(res, 400, "built-in and pack calls can't be edited");
+      const meta = {};
+      for (const k of ["animal", "name", "hint"]) if (p[k] !== undefined) meta[k] = String(p[k]).trim();
+      const bad = metaError(meta);
+      if (bad) return fail(res, 400, bad);
+      if (meta.name === "") meta.name = s.id.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());  // empty resets to the default from the id
+      Object.assign(s, meta); sndRev++; return ok(res);
     }
     case "POST /api/sounds/delete": {
       const i = sounds.findIndex((x) => x.id === p.id);
