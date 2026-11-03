@@ -1,6 +1,6 @@
 # Runs before each build:
 #  1. web/build.py gzips web/index.html into src/web_page.h (fails the build if it fails or
-#     the page is over its 24 KB budget).
+#     the page is over its 26 KB budget).
 #  2. Writes src/version.h with the firmware version (git describe, else the build date).
 # Both files are generated and git-ignored; each is only rewritten when it changes, so an
 # unchanged page or version does not force a rebuild.

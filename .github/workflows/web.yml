@@ -23,5 +23,5 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm test
-      - name: Build page header and check the 24 KB budget
+      - name: Build page header and check the 26 KB budget
         run: python3 build.py

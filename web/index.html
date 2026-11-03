@@ -157,7 +157,75 @@ nav button[aria-current="page"]{background:var(--accent);color:var(--on-accent)}
 .toast{position:fixed;left:50%;bottom:calc(160px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:12px 18px;border-radius:var(--r);font-size:16px;z-index:20;max-width:calc(100% - 32px);text-align:center;box-shadow:3px 3px 0 var(--accent);animation:rise .25s both}
 .offline{position:fixed;inset:0;z-index:30;background:var(--bg);display:grid;place-items:center;text-align:center;padding:24px}
 .offline p{max-width:30ch;margin:8px auto 0;color:var(--muted)}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+/* Motion: dealt-in tickets, stamp press, caution tape, drift, sliding tab. All off under prefers-reduced-motion. */
+.call{animation:deal .55s cubic-bezier(.2,.9,.25,1.1) both;animation-delay:calc(var(--i,0)*45ms)}
+.call:nth-child(odd){--t:-2.5deg}.call:nth-child(even){--t:2deg}
+@keyframes deal{from{opacity:0;transform:translateY(20px) rotate(var(--t)) scale(.93)}}
+.call{transition:translate .12s}
+.call.on{translate:1px 1px}
+.call.on .nm{transform-origin:0 50%;animation:thump .4s cubic-bezier(.2,1.8,.4,1)}
+.call.on::after{content:"";position:absolute;left:var(--px,50%);top:var(--py,50%);width:90px;height:90px;margin:-45px;border-radius:50%;background:var(--on-accent);animation:ink .7s ease-out both}
+@keyframes thump{from{transform:scale(1.18) rotate(-2deg)}}
+@keyframes ink{from{transform:scale(0);opacity:.28}to{transform:scale(4);opacity:0}}
+.call.on::before{background:repeating-linear-gradient(-45deg,var(--on-accent) 0 7px,transparent 7px 14px) 0 0/19.8px 19.8px;animation:march .9s linear infinite}
+@keyframes march{to{background-position:19.8px 0}}
+body::before{will-change:transform;animation:drift 60s ease-in-out infinite alternate}
+body.dawn::before{animation:none}
+@keyframes drift{from{transform:scale(1.12) translate3d(4%,-3%,0)}to{transform:scale(1.12) translate3d(-4%,3%,0) rotate(.8deg)}}
+.tabs{position:relative;--n:2;--k:0;background:var(--surface)}
+.tabs:has(button:nth-child(3)){--n:3}
+.tabs:has(button:nth-child(2)[aria-selected=true]){--k:1}
+.tabs:has(button:nth-child(3)[aria-selected=true]){--k:2}
+.tabs::before{content:"";position:absolute;inset:0 auto 0 0;width:calc(100%/var(--n));background:var(--fg);transform:translateX(calc(var(--k)*100%));transition:transform .32s cubic-bezier(.3,1.3,.5,1)}
+.tabs button{position:relative;background:none;transition:color .25s}
+.tabs button[aria-selected=true]{background:none}
+body.dawn .tabs::before{background:var(--accent)}
+body.dawn .tabs button[aria-selected=true]{background:none}
+.screen:not([hidden]){animation:slide .35s cubic-bezier(.2,.8,.2,1) both}
+nav button[aria-current=page] svg{animation:hop .5s}
+h2::after{transform-origin:0 50%;animation:draw .6s .1s ease-out both}
+@keyframes slide{from{opacity:0;transform:translateY(12px)}}
+@keyframes hop{30%{transform:translateY(-6px) scale(1.15)}60%{transform:translateY(1px)}}
+@keyframes draw{from{transform:scaleX(0)}}
+.stop{position:relative}
+.stop:not(:disabled)::after{content:"";position:absolute;inset:-2px;border:2px solid var(--accent);border-radius:inherit;pointer-events:none;animation:ring 1.8s ease-out infinite}
+@keyframes ring{from{transform:scale(1);opacity:.9}to{transform:scale(1.14,1.3);opacity:0}}
+.dot.good{position:relative}
+.dot.good::after{content:"";position:absolute;inset:-1.5px;border-radius:50%;border:2px solid var(--good);animation:ping 2.6s ease-out infinite}
+@keyframes ping{from{transform:scale(1);opacity:.8}60%,to{transform:scale(2.6);opacity:0}}
+input[type=range]::-webkit-slider-runnable-track{background:repeating-linear-gradient(90deg,var(--line) 0 2px,transparent 2px 10%),linear-gradient(var(--accent),var(--accent)) 0/var(--p,50%) 100% no-repeat,var(--surface)}
+input[type=range]::-moz-range-track{background:repeating-linear-gradient(90deg,var(--line) 0 2px,transparent 2px 10%),linear-gradient(var(--accent),var(--accent)) 0/var(--p,50%) 100% no-repeat,var(--surface)}
+input[type=range]::-webkit-slider-thumb{transition:transform .18s cubic-bezier(.3,1.7,.5,1)}
+input[type=range]::-moz-range-thumb{transition:transform .18s cubic-bezier(.3,1.7,.5,1)}
+input[type=range]:active::-webkit-slider-thumb{transform:scale(1.2)}
+input[type=range]:active::-moz-range-thumb{transform:scale(1.2)}
+.vol .lbl b.bump{animation:bump .25s}
+@keyframes bump{40%{transform:scale(1.25);color:var(--accent)}}
+.toast{animation:stampin .4s cubic-bezier(.2,1.7,.4,1) both}
+@keyframes stampin{from{opacity:0;transform:translateX(-50%) scale(1.6) rotate(-5deg)}}
+.switch::after{transition:left .28s cubic-bezier(.3,1.7,.5,1),width .15s}
+.switch:active::after{width:27px}
+.switch:checked:active::after{left:20px}
+.meter i{transform-origin:0 0;animation:mfill 1.1s cubic-bezier(.2,.8,.2,1) both}
+@keyframes mfill{from{transform:scaleX(0)}}
+.call.on .bar{width:100%;transform-origin:0 0;animation:fill var(--d,3s) linear both}
+.call.on.lp .bar{animation-iteration-count:infinite}
+@keyframes fill{from{transform:scaleX(0)}}
+::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
+::view-transition-new(root){animation:wipe .75s cubic-bezier(.4,0,.2,1) both}
+@keyframes wipe{from{clip-path:circle(0 at var(--x) var(--y))}to{clip-path:circle(150vmax at var(--x) var(--y))}}
+.iconbtn svg{transition:transform .5s cubic-bezier(.3,1.6,.5,1)}
+.iconbtn[aria-pressed=true] svg{transform:rotate(-30deg) scale(1.15)}
+.radar{display:none;position:relative;height:120px;margin:4px 0 8px;place-items:center}
+.scanning .radar{display:grid}
+.radar i{position:absolute;width:100px;height:100px;border:2px solid var(--fg);border-radius:50%;opacity:0;animation:rad 2.4s ease-out infinite}
+.radar i:nth-child(2){animation-delay:.8s}.radar i:nth-child(3){animation-delay:1.6s}
+#devList li{animation:rise .4s both;animation-delay:calc(var(--i,0)*120ms)}
+.sig i.on{transform-origin:0 100%;animation:grow .35s cubic-bezier(.2,1.5,.4,1) both;animation-delay:calc(var(--i,0)*120ms + 150ms)}
+#devList .old,#devList .old .sig i{animation:none}
+@keyframes rad{from{transform:scale(.2);opacity:.7}to{transform:scale(1.2);opacity:0}}
+@keyframes grow{from{transform:scaleY(0)}}
+@media (prefers-reduced-motion:reduce){*,::before,::after{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
@@ -196,6 +264,7 @@ nav button[aria-current="page"]{background:var(--accent);color:var(--on-accent)}
         <div class="card">
           <p class="sub" style="margin:0 0 12px">Put the speaker in pairing mode first. Searching takes up to about 25 seconds and stops any call that is playing.</p>
           <button class="btn primary wide" id="scanBtn" type="button">Search for speakers</button>
+          <div class="radar" aria-hidden="true"><i></i><i></i><i></i></div>
           <ul class="list" id="devList"></ul>
         </div>
       </div>
@@ -365,7 +434,7 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>"&#"+c.charCodeAt(0)+";");
 const fmtS=ms=>ms?(ms/1000).toFixed(1)+" s":"";
 const fmtKB=b=>b>=2**30?(b/2**30).toFixed(1)+" GB":b>=10*2**20?Math.round(b/2**20)+" MB":Math.round(b/1024)+" KB";  // the SD card is in MB or GB
-let st={bt:"",speaker:"",playing:false,current:"",volume:null,loop:false},sounds=[],devices=[];
+let st={bt:"",speaker:"",playing:false,current:"",volume:null,loop:false},sounds=[],devices=[],devSeen=0;
 let offlineSticky=0,stAt=0,lastOk=Date.now(),ws=null,wsOk=false,restarting=0,scanUntil=0,volSentAt=0,volTimer=null;
 
 function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,3000)}
@@ -495,8 +564,8 @@ function paintPlaying(){
   if(len&&st.loop)pos%=len;
   document.querySelectorAll(".call").forEach(b=>{
     const on=st.playing&&b.dataset.id===st.current;
-    b.classList.toggle("on",on);b.setAttribute("aria-pressed",on);
-    b.querySelector(".bar").style.width=on&&len?Math.min(100,pos/len*100)+"%":"0";
+    const was=b.classList.contains("on");b.classList.toggle("on",on);b.setAttribute("aria-pressed",on);b.classList.toggle("lp",!!st.loop);
+    if(on&&!was){const r=b.querySelector(".bar").style;r.setProperty("--d",(len||1)+"ms");r.animationDelay=-pos+"ms"}  // the bar glides in CSS; a late joiner starts part-way
   });
   $("stopBtn").disabled=!st.playing;
 }
@@ -504,7 +573,7 @@ function paintPlaying(){
 
 // ---- Volume (sent at most every 150 ms while dragging) ----
 function setVol(v,final){
-  v=Math.max(0,Math.min(100,Math.round(v)));st.volume=v;$("volTxt").textContent=v;$("vol").value=v;
+  v=Math.max(0,Math.min(100,Math.round(v)));st.volume=v;$("volTxt").textContent=v;$("vol").value=v;$("vol").style.setProperty("--p",v+"%");$("volTxt").classList.remove("bump");void $("volTxt").offsetWidth;$("volTxt").classList.add("bump");
   clearTimeout(volTimer);
   const go=()=>{volSentAt=Date.now();send("volume","/api/volume",{level:v}).catch(e=>toast(why(e)))};
   if(final||Date.now()-volSentAt>150)go();else volTimer=setTimeout(go,150);
@@ -514,16 +583,17 @@ $("vol").onchange=e=>setVol(+e.target.value,true);
 // Steps need the board's volume first, or null-5 would send 0
 $("volDn").onclick=()=>{if(st.volume!=null)setVol(st.volume-5,true)};
 $("volUp").onclick=()=>{if(st.volume!=null)setVol(st.volume+5,true)};
+$("groups").addEventListener("pointerdown",e=>{const b=e.target.closest(".call");if(b){const r=b.getBoundingClientRect();b.style.setProperty("--px",e.clientX-r.left+"px");b.style.setProperty("--py",e.clientY-r.top+"px")}});
 $("stopBtn").onclick=stop;
 
 // ---- Speaker ----
 const sigBars=r=>{const n=r>-60?4:r>-70?3:r>-80?2:1;return `<span class="sig" title="${r} dBm">${[1,2,3,4].map(i=>`<i class="${i<=n?"on":""}"></i>`).join("")}</span>`};
 function renderDevices(scanning){
-  const ul=$("devList");
+  const ul=$("devList");ul.parentNode.classList.toggle("scanning",scanning&&!devices.length);
   if(scanning&&!devices.length){ul.innerHTML=`<li class="empty"><span class="spin"></span>Searching…</li>`;return}
-  ul.innerHTML=devices.map((d,i)=>`<li>${sigBars(d.rssi)}<div class="grow"><div class="nm">${esc(d.name||"Unnamed")}</div><div class="sub mono">${esc(d.addr||"")}</div></div>${d.name||d.addr?`<button class="btn" type="button" data-i="${i}">Use</button>`:""}</li>`).join("")
+  ul.innerHTML=devices.map((d,i)=>`<li class="${i<devSeen?"old":""}" style="--i:${Math.max(0,i-devSeen)}">${sigBars(d.rssi)}<div class="grow"><div class="nm">${esc(d.name||"Unnamed")}</div><div class="sub mono">${esc(d.addr||"")}</div></div>${d.name||d.addr?`<button class="btn" type="button" data-i="${i}">Use</button>`:""}</li>`).join("")
     +(scanning?`<li class="empty"><span class="spin"></span>Still searching…</li>`:"");
-  ul.querySelectorAll("[data-i]").forEach(b=>b.onclick=()=>useSpeaker(devices[+b.dataset.i]));
+  devSeen=devices.length;ul.querySelectorAll("[data-i]").forEach(b=>b.onclick=()=>useSpeaker(devices[+b.dataset.i]));
 }
 async function scanPoll(){
   let r;try{r=await api("/api/bt/devices")}catch(_){r=[]}
@@ -534,8 +604,8 @@ async function scanPoll(){
   else{$("scanBtn").disabled=false;$("scanNote").textContent=devices.length?devices.length+" found":"None found";if(!devices.length)$("devList").innerHTML=`<li class="empty">No speakers found. Is the speaker in pairing mode?</li>`}
 }
 $("scanBtn").onclick=async()=>{
-  $("scanBtn").disabled=true;$("scanNote").textContent="";devices=[];st.playing=false;paint();renderDevices(true);
-  try{await api("/api/bt/scan",{})}catch(e){if(!/not found/i.test(e.message)){toast(why(e));$("scanBtn").disabled=false;$("devList").innerHTML="";return}}
+  $("scanBtn").disabled=true;$("scanNote").textContent="";devices=[];devSeen=0;st.playing=false;paint();renderDevices(true);
+  try{await api("/api/bt/scan",{})}catch(e){if(!/not found/i.test(e.message)){toast(why(e));$("scanBtn").disabled=false;renderDevices(false);return}}
   scanUntil=Date.now()+12000;setTimeout(scanPoll,1500);
 };
 async function useSpeaker(d){
@@ -739,7 +809,7 @@ function paint(){
   $("noSpkText").innerHTML=st.speaker?`<b>${esc(st.speaker)} is not connected.</b> Turn it on; the caller finds it by itself.`:`<b>No speaker connected.</b> Pick one under Speaker.`;
   // With a speaker saved, a tap also wakes it or reconnects it (F07), so calls stay usable.
   document.querySelectorAll(".call").forEach(b=>b.disabled=!st.speaker);
-  if(st.volume!=null&&document.activeElement!==$("vol")&&Date.now()-volSentAt>1000){$("vol").value=st.volume;$("volTxt").textContent=st.volume}
+  if(st.volume!=null&&document.activeElement!==$("vol")&&Date.now()-volSentAt>1000){$("vol").value=st.volume;$("vol").style.setProperty("--p",st.volume+"%");$("volTxt").textContent=st.volume}
   $("volDn").disabled=$("volUp").disabled=$("vol").disabled=st.volume==null;
   document.querySelectorAll("[data-del]").forEach(b=>b.disabled=!!st.playing);
   // The meter shows the SD card (where recordings go) when the board reports one; older boards report flash only.
@@ -763,9 +833,10 @@ function go(name){
   window.scrollTo(0,0);
 }
 document.addEventListener("click",e=>{const g=e.target.closest("[data-go]");if(g)go(g.dataset.go)});
-function dawn(on){document.body.classList.toggle("dawn",on);$("dawnBtn").setAttribute("aria-pressed",on);
+function dawn(on,x,y){const go=()=>{document.body.classList.toggle("dawn",on);$("dawnBtn").setAttribute("aria-pressed",on)};
+  if(x!=null&&document.startViewTransition&&!matchMedia("(prefers-reduced-motion:reduce)").matches){const q=document.documentElement.style;q.setProperty("--x",x+"px");q.setProperty("--y",y+"px");document.startViewTransition(go)}else go();
   document.querySelector('meta[name=theme-color]').content=on?"#070302":matchMedia("(prefers-color-scheme:dark)").matches?"#10130c":"#e8dcbc";try{localStorage.dawn=on?"1":""}catch(_){}}
-$("dawnBtn").onclick=()=>dawn(!document.body.classList.contains("dawn"));
+$("dawnBtn").onclick=e=>{const r=e.currentTarget.getBoundingClientRect();dawn(!document.body.classList.contains("dawn"),r.left+r.width/2,r.top+r.height/2)};
 try{if(localStorage.dawn)dawn(true)}catch(_){}
 $("loopSw").onchange=e=>{const on=e.target.checked;st.repeat=on;
   send("repeat","/api/repeat",{on:on?1:0}).catch(err=>{e.target.checked=!on;toast(why(err))})};

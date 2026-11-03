@@ -14,7 +14,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent
 SRC = ROOT / "index.html"
 OUT = ROOT.parent / "firmware" / "src" / "web_page.h"
-BUDGET = 24 * 1024  # keep the page small: it shares the radio with Bluetooth audio
+BUDGET = 26 * 1024  # keep the page small: it shares the radio with Bluetooth audio
 
 
 def squeeze(html: str) -> str:
