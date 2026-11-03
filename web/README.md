@@ -1,13 +1,14 @@
 # Web app
 
-The control page the ESP32 serves: **Calls**, **Speaker** and **Settings** screens, built for a phone in the woods. One file, `index.html`, with inline CSS and JS and system fonts only, so it needs no internet. Design mockup: https://claude.ai/artifact/CEv3yQKF57byhWBqGVYNv5
+The control page the ESP32 serves: **Calls**, **Speaker** and **Settings** screens, built for a phone in the woods. One file, `index.html`, with inline CSS and JS and one embedded font (a Big Shoulders Display Black subset, SIL OFL, base64 in the page), so it needs no internet. Look: a field guide. Parchment paper and hunter's blaze orange by day, a dark blind at night, a red-only dawn mode. Calls are stamped tickets with a coloured band per group, and "use with care" calls get caution tape.
 
 | Path | What |
 |---|---|
 | `index.html` | The page |
-| `build.py` | Gzips the page into `firmware/src/web_page.h` (git-ignored) and fails over 26 KB |
+| `build.py` | Gzips the page into `firmware/src/web_page.h` (git-ignored) and fails over 26 KB (the page is 25.1 KB, 94%) |
 | `mock/server.mjs` | Fake ESP32 API with no dependencies, so the page can be built and tested without the board. Mock-only hook: `POST /api/mock/speaker mode=asleep|off|on` puts the speaker to sleep or out of reach to test waking |
-| `test/smoke.mjs` | Playwright run of the main flows against the mock at phone width. CI runs it on every change under `web/` |
+| `fonts/` | The embedded font subset and its licence (`OFL.txt`) |
+| `test/` | `api.mjs` (API contract), `smoke.mjs` (Playwright, phone width), `features.mjs`, `phones.mjs`, `settings.mjs`, `stress.mjs`. CI runs them on every change under `web/` |
 
 ## Use it
 
@@ -20,11 +21,12 @@ python3 build.py            # writes firmware/src/web_page.h, then flash with pi
 
 ## What the page does
 
-- **Calls:** one button per sound, grouped Soft calls / Louder calls / Use with care (gobble and putt). Tap to play, tap the playing call again to stop. "Repeat" loops the call. Stop and volume (slider plus − / + steps for gloved hands) stay pinned at the bottom.
+- **Calls:** one ticket per sound under tabs for Turkey, Moose and Deer (Deer shows once there are deer calls; the tab is remembered). Turkey calls are grouped Soft calls / Louder calls / Use with care (gobble and putt) / Dindon pack; your own uploads sit under "Your recordings" on the tab of the animal you chose. Tap to play, tap the playing call again to stop. "Repeat" loops the call. Stop and volume (slider plus − / + steps for gloved hands) stay pinned at the bottom.
 - **Speaker:** status, search (up to about 25 s, stops playback), Use, Forget (tap twice). A speaker without a name is usable by its address.
-- **Settings:** sound list with storage meter, Wi-Fi name and password, device name, and device health. Upload and delete are deferred (F03): the controls are hidden by `EDIT_SOUNDS = false` and the firmware answers 501. When enabled, upload asks before replacing a sound with the same name, and delete is refused while playing.
-- **Instructions** (`?` button in the header): joining the Wi-Fi, pairing, playing, Settings, the 5-second BOOT reset and troubleshooting. Static text, about 1.1 KB gzipped.
+- **Settings:** sound list with storage meter, Wi-Fi name and password, device name, and device health. With the SD card in, **Add a sound** converts a recording on the phone and asks for its animal, a name (32 bytes at most) and an optional description (47 bytes at most); after the upload the page jumps to that animal's tab. **Edit** on a recording changes the name, description or animal later without uploading it again (F16). Upload asks before replacing a sound with the same name, and delete is refused while that sound plays. With no card, adding and deleting are hidden.
+- **Instructions** (`?` button in the header): joining the Wi-Fi, pairing, playing, Settings and adding sounds, the box's buttons, phone-free mode, the 5-second BOOT reset and troubleshooting. Static text, about 2 KB gzipped, inside the 26 KB page budget.
 - **Dawn mode** (moon button): dim, red-only colors to keep night vision. Remembered on the phone. Otherwise the page follows the phone's light or dark setting.
+- **Motion:** 15 small animations (tickets dealt in, a stamp press when a call starts, marching caution tape, a sliding tab underline, a circular wipe between day and dawn, and so on). All of them switch off when the phone asks for reduced motion (`prefers-reduced-motion`). Keep any new animation behind that rule and inside the page budget.
 
 ## API contract with the firmware
 
@@ -33,7 +35,7 @@ Agreed with the firmware thread; the summary table is in `../docs/architecture.m
 | Call | Notes for the page |
 |---|---|
 | `GET /api/status` | `bt` is `idle`, `searching`, `connecting` or `connected`; also `speaker`, `playing`, `current`, `loop` (the call playing now repeats), `repeat` (the shared Repeat switch), `pos_ms`, `len_ms`, `volume`, `heap`, `minHeap`, `fsFree`, `fsTotal`, `clients`, `uptime`, `underruns`, `version`, `stream` (`ready`, `waking`, `suspended` or `down`) and `error` (last wake failure, such as "Speaker did not answer"; cleared by the next tap) |
-| `GET /api/sounds` | `[{id, name, group, bytes, ms}]` in `sounds/index.json` order. `group` is `soft`, `loud` or `care`; sounds without one are shown under "Other sounds". A plain list of ids (Phase 0) also works |
+| `GET /api/sounds` | `[{id, name, group, animal, hint, bytes, ms}]`: built-ins in `sounds/index.json` order, then call packs, then uploads. `group` is `soft`, `loud`, `care`, `pack` or `mine` (uploads); `animal` is `turkey`, `moose` or `deer`; `hint` is the upload's description. Sounds without a group are shown under "Other sounds". A plain list of ids (Phase 0) also works |
 | `POST /api/play` `id`, `loop=0/1` | Never waits. 200: playing now. 202 `{"waking":true}`: the speaker was asleep or out of reach, the board wakes it (or reconnects) and plays, or sets `error` after 8 s. 409: no speaker saved, or a search is running. Stop also cancels a waking call |
 | `POST /api/stop`, `POST /api/volume` `level` | |
 | `POST /api/repeat` `on=0/1` | Sets the Repeat switch on the board, shared by every phone; also changes whether the call playing now repeats. A play's `loop` sets it too. Off after a restart |
@@ -49,4 +51,4 @@ Agreed with the firmware thread; the summary table is in `../docs/architecture.m
 
 ## How the page reaches the board
 
-The page is compiled into the firmware, not stored in LittleFS. `pio run -t uploadfs` rewrites the whole LittleFS partition, so a page kept there would wipe every sound uploaded from the phone each time the page changed. `build.py` turns the page into `firmware/src/web_page.h` (`kWebPageGz`, `kWebPageGzLen`, about 10 KB). The Phase 2 firmware will run it from a PlatformIO pre-build script (failing the build when it fails) and serve it at `/` with `Content-Encoding: gzip`, replacing the Phase 0 test page. Updating the page is then a normal `pio run -t upload`, and the sounds stay put.
+The page is compiled into the firmware, not stored in LittleFS. `pio run -t uploadfs` rewrites the whole LittleFS partition, so a page kept there would wipe every sound uploaded from the phone each time the page changed. `build.py` turns the page into `firmware/src/web_page.h` (`kWebPageGz`, `kWebPageGzLen`, about 25 KB). The Phase 2 firmware will run it from a PlatformIO pre-build script (failing the build when it fails) and serve it at `/` with `Content-Encoding: gzip`, replacing the Phase 0 test page. Updating the page is then a normal `pio run -t upload`, and the sounds stay put.

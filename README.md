@@ -32,7 +32,7 @@ Full design: [docs/architecture.md](docs/architecture.md)
 | `firmware/partitions.csv` | 2.5 MB app + 1.375 MB LittleFS |
 | `firmware/tools/` | One-off board probes: `sd-probe` (SD card, PSRAM), `ui-probe` (screen and buttons) |
 | `firmware/data/sounds/` | Generated sound files (not in git) + hand-written `index.json` |
-| `web/` | Web app source and mock API server |
+| `web/` | Web app source, embedded font, mock API server and tests |
 | `tools/audio/` | Sound download/convert script and source list |
 | `docs/` | Architecture, feature specs, test plans |
 
@@ -51,4 +51,6 @@ Sources and licenses are listed in `tools/audio/SOURCES.md`.
 
 ## Status
 
-Working on Eric's WROVER-E board (31 Oct 2026): the phone page, speaker pairing and reconnect, Repeat, settings, the SD card with call packs and phone uploads (F12, F14, F03), and the box's screen and buttons with phone-free mode (F15). Feature specs and their board tests are in [docs/features/](docs/features/README.md). Flash and test steps: [firmware/README.md](firmware/README.md).
+Working on Eric's WROVER-E board (31 Oct 2026): the phone page, speaker pairing and reconnect, Repeat, settings, the SD card with call packs and phone uploads (F12, F14, F03), and the box's screen and buttons with phone-free mode (F15).
+
+Since then (2 to 3 Nov 2026): the phone page got a new look (field-guide parchment and hunter's blaze orange, a dark mode and a red-only dawn mode, one embedded display font, 15 small animations that switch off for phones set to reduce motion; #43, #46). Uploads now take an animal (turkey, moose or deer), a name and a description, and all three can be edited later without uploading again (F16; #44, #45). Two SD card fixes keep the sound list right after a card glitch or a restart (#40 to #42). The page is 25.1 KB gzipped of its 26 KB budget. No 3D-printed case is planned: that idea was dropped. Feature specs and their board tests are in [docs/features/](docs/features/README.md). Flash and test steps: [firmware/README.md](firmware/README.md).

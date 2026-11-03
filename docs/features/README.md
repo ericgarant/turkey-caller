@@ -21,7 +21,7 @@ Specs for what comes after Phase 0 (the Wi-Fi test page and Bluetooth ADPCM play
 | F13 | [Motion sensor and LED](F13-motion-led.md) | **Dropped** (Eric removed the PIR and LED, 25 Oct 2026) | — |
 | F14 | [Call packs: deer, moose and more](F14-call-packs.md) | Web (done with the spec), firmware after F12 | new B20 |
 | F15 | [Screen and buttons on the box](F15-on-device-ui.md), with phone-free mode | Firmware (done: #35, #36, #37) | new B21, B22 |
-| F16 | [Name, animal and description for my recordings](F16-upload-labels.md) | Firmware, web | new B23 |
+| F16 | [Name, animal and description for my recordings](F16-upload-labels.md) | Firmware, web (done: #44, #45) | new B23 |
 
 ## Suggested build order
 
@@ -35,6 +35,7 @@ Specs for what comes after Phase 0 (the Wi-Fi test page and Bluetooth ADPCM play
 8. F14 on top of F12: call packs on the SD card.
 9. F11 when the Cooboom arrives.
 10. F15 (Eric's choice, 31 Oct 2026): the breadboard probe (#35), play from the box (#36), then phone-free mode (#37). All three passed on the board on 31 Oct 2026.
+11. F16 (Eric, 2 Nov 2026): firmware (#44), then the page (#45). Web look and motion (#43, #46) are not a feature spec; the page budget is now 26 KB.
 
 ## Deferred, then resumed
 

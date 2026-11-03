@@ -8,14 +8,16 @@ Test setup: ESP32 plugged into the Mac (power and serial log), speaker charged a
 
 | Test | What it covers |
 |---|---|
-| `npm run test:api` | API contract on the mock: status fields, sound list shape, play/replace/stop, 400/404/409/413 errors, volume clamp, upload and delete rules, config validation, forget and reconnect |
+| `npm run test:api` | API contract on the mock: status fields, sound list shape (`animal`, `hint`, `group`), play/replace/stop, 400/404/409/413 errors, volume clamp, upload and delete rules, F16 upload labels and `POST /api/sounds/edit` (bad animal, edit keeps the audio), config validation, forget and reconnect |
 | `node web/test/settings.mjs` | Two phones on the mock: F05 settings sync live, edits in progress kept, stale saves refused, Wi-Fi change and BOOT reset rejoin messages, volume and Repeat shared |
-| `npm test` (smoke) | Page flows in a phone-sized browser: 16 calls in four groups, play/stop, volume, speaker forget/search/use, upload/delete hidden (F03 deferred), Wi-Fi settings, dawn mode |
-| `npm run test:features` | HTTP and WebSocket tests on the mock: every call plays, volume (HTTP, WebSocket, clamp, seen by both phones within 1 s), Repeat shared by two clients (late joiner, switching during a call, replace, Stop, forget), busy 503 recovery, and speaker wake and reconnect (F06/F07, active once the PR #14 mock hook is on main). Upload tests are parked (phone upload deferred, PR #12); `RUN_PARKED=1` runs them |
+| `npm test` (smoke) | Page flows in a phone-sized browser: 16 calls in four groups, play/stop, volume, speaker forget/search/use, animal tabs, SD card and no-card states, add a sound with animal, name and description, Edit and move it to another tab, delete (F03, F16), Wi-Fi settings, instructions page, dawn mode |
+| `npm run test:features` | HTTP and WebSocket tests on the mock: every call plays, volume (HTTP, WebSocket, clamp, seen by both phones within 1 s), Repeat shared by two clients (late joiner, switching during a call, replace, Stop, forget), busy 503 recovery, and speaker wake and reconnect (F06/F07, active once the PR #14 mock hook is on main). Upload tests are parked and run only with `RUN_PARKED=1`; the upload flow is covered in `api.mjs` and `smoke.mjs` |
 | `npm run test:phones` | Two phones in a browser: playing state, Repeat and volume stay in step; the page retries through a busy window and says so when the board stays busy |
 | `npm run stress` | 50 rapid plays (150 ms apart) against the mock; same pass rule as the board test B9 |
 
 The same scripts run against the board: `node web/test/stress.mjs http://192.168.4.1` and `node web/test/api.mjs http://192.168.4.1`. On the board `api.mjs` runs only read-only and play/stop/volume steps; `DESTRUCTIVE=1` adds forget, config, upload and delete (these change the board). It lists every mismatch at the end (for example the `bt` state strings the Phase 0 firmware reports, which differ from the page's `idle/searching/connecting/connected`). Any firmware change to the API must update the mock and `api.mjs` in the same PR.
+
+The page also has a size gate: `python3 web/build.py` (CI step "check the 26 KB budget") fails when the gzipped page passes 26 KB. It is 25.1 KB now, so check it before adding anything to the page. Animations must stay behind `prefers-reduced-motion`; check by hand with the phone's Reduce Motion setting on (nothing slides, stamps or wipes).
 
 What the mock cannot show, so it stays a board test: audio quality, real timing of retries (3 s / 10 s) and the 250 ms pre-roll, the 5 min idle pause, heap and underruns, Wi-Fi/Bluetooth sharing the radio, and a second tap keeping the first tap's 8 s deadline.
 
@@ -39,7 +41,7 @@ Fast pass (about 10 minutes): B1, B2, B4, B5, B9. Full pass before any release.
 | B10 | Yes (Wi-Fi name check is Phase 2) | Power cycle | Pull power during playback, restore it; repeat 5 times | Board comes back with the same speaker, volume, Wi-Fi name and sounds; auto-reconnects; no filesystem error in the serial log |
 | B11 | Yes | Range | Phone at 5, 15, 30 m from the board (open ground); then board-to-speaker at 3, 8, 12 m | Note the distance where the page gets slow or drops, and where audio breaks up; the page must recover on its own when you walk back. Targets: page usable at 15 m, audio clean at 8 m |
 | B12 | Yes | Two phones | Join a second phone while a call plays | Audio does not break up; both pages show the same state; a third client is refused politely (max 2) |
-| B13 | Deferred (F03) | Upload and delete | Upload a short clip from the phone while idle; try the same during playback; delete it | Idle upload works and plays; during playback it is refused with a message; existing sounds are untouched |
+| B13 | Yes (F03 is live) | Upload and delete | Upload a short clip from the phone while idle; try the same during playback; delete it | Idle upload works and plays; during playback it is refused with a message; existing sounds are untouched |
 | B14 | Phase 2 | Settings change | Change the Wi-Fi name and password in Settings, save | Board restarts, new name appears, phone rejoins with the new password; a password under 8 characters is refused |
 | B15 | Phase 2 | Page update keeps sounds | Flash a new firmware build with `pio run -t upload` (not `uploadfs`) | All sounds are still there |
 | B16 | Yes, via the command | Soak (Phase 4) | Run `TAPS=360 GAP_MS=20000 node web/test/stress.mjs http://192.168.4.1` (a call every 20 s for 2 hours, in order, at normal volume) | Script prints PASS; no audible dropout; speaker stays connected |

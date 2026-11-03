@@ -4,6 +4,8 @@
 
 **Asked by:** Eric, 2 Nov 2026 ("why have we put YOUR RECORDING on the turkey page by default").
 
+**Status:** built. Firmware #44, page #45 (the add-sound form and the Edit button in Settings), tests in `web/test/api.mjs` and `smoke.mjs`. Board test B23 is still to run.
+
 **Depends on:** F03 (uploads), F12 (SD card), F14 (the three animals).
 
 ## Contract

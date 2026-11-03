@@ -11,7 +11,8 @@ Notes for whoever picks up the firmware next. These are the things the specs and
 | F10 heap floor | Merged work in #10 and #11. One open item, tracked in **issue #8** (see below) |
 | F06 reconnect, F07 idle wake | PR #14, one state machine in `bt.cpp` |
 | F05 Settings | Web side merged (#17). Firmware side in `src/settings.*` and the `/api/config` handlers in `web.cpp`; restart and BOOT-button reset run from `web::loop()` |
-| F03 upload, F09 storage | Deferred by Eric. Keep the 501 stubs; the page hides the controls (`EDIT_SOUNDS=false`) |
+| F03 upload | Done on the SD card (#30, #33). F09 storage is superseded by F12 |
+| F16 upload labels | Done: sidecar `/sounds/<id>.json`, `POST /api/sounds/edit` (#44, web #45) |
 | F11 Cooboom speaker | When it arrives |
 
 ## Open: issue #8 (F10)

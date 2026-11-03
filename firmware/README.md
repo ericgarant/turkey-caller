@@ -21,7 +21,7 @@ The ESP32 runs its own Wi-Fi network, serves the control page from `web/`, and p
 | `src/control.*` | The actions the page and the box share: play, stop, volume, the Repeat switch (F15) |
 | `src/ui.*` | The box: LCD1602 and four buttons, the call list and playing screens, phone-free switch (F15, WROVER only) |
 | `src/settings.*` | Wi-Fi name, password, device name and phone-free mode, in NVS |
-| `scripts/prebuild.py` | Before each build: runs `../web/build.py` (page → `src/web_page.h`, fails over 20 KB) and writes `src/version.h` from `git describe` |
+| `scripts/prebuild.py` | Before each build: runs `../web/build.py` (page → `src/web_page.h`, fails over 26 KB) and writes `src/version.h` from `git describe` |
 | `scripts/check_size.py` | Fails the build if the app binary is over 2.25 MB (90% of the app partition) |
 | `tools/sd-probe/` | One-off probe for a new board: chip revision, flash and PSRAM size, whether the card answers and mounts |
 | `tools/ui-probe/` | One-off probe for the screen and buttons: LCD address, each press and hold, backlight |
@@ -111,7 +111,7 @@ Clips are `data/sounds/<id>.wav`, where the id is `a-z0-9_`, 24 characters at mo
 
 ## API
 
-The contract is in `../web/README.md`. POST bodies are form fields; replies are JSON. `/api/status` (and each `/ws` push) includes `version`, `minHeap` (internal heap), `fsFree` and `fsTotal` (flash), `sdFree` and `sdTotal` (the card, 0 and 0 with none) and `psramFree` (0 on the WROOM board). `error` carries "SD card removed" when a recording stops because the card failed. Not built yet, and answering 501: upload and delete (`POST /api/sounds`, `/api/sounds/delete`, F03).
+The contract is in `../web/README.md`. POST bodies are form fields; replies are JSON. `/api/status` (and each `/ws` push) includes `version`, `minHeap` (internal heap), `fsFree` and `fsTotal` (flash), `sdFree` and `sdTotal` (the card, 0 and 0 with none) and `psramFree` (0 on the WROOM board). `error` carries "SD card removed" when a recording stops because the card failed. Uploads (`POST /api/sounds`, `/api/sounds/delete`, F03) go to the SD card and answer 503 with none. Each upload may carry a sidecar `/sounds/<id>.json` with its animal, name and description (`POST /api/sounds/edit` rewrites only that file, F16).
 
 ## Known limits
 
