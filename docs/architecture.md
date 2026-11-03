@@ -16,7 +16,7 @@ These hold for every change. A PR that breaks one needs Eric's OK first, and the
 5. Internal heap stays above 40 KB while playing with two phones on the page (F10). Every firmware PR reports the internal heap low (`minHeap`, `low=`).
 6. Audio buffers (the PCM ring and decode buffers) are internal RAM, never PSRAM: static, or `heap_caps_malloc(MALLOC_CAP_INTERNAL)`, checked at boot. Large non-audio lists (the sound list) go to PSRAM when the board has it.
 7. The PSRAM cache workaround stays on; `CONFIG_ESP32_REV_MIN_3` panics this build at boot.
-8. App binary under 2.25 MB; the page under 24 KB gzipped.
+8. App binary under 2.25 MB; the page under 26 KB gzipped.
 
 **Sounds**
 9. One format on the board: mono IMA ADPCM WAV, 22.05 kHz. Anything else is converted before it reaches the board (scripts in `tools/audio/`, or the page for uploads).
